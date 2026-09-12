@@ -1,0 +1,259 @@
+{#
+  profile.html — HỒ SƠ CÁ NHÂN: sửa thông tin, đổi mật khẩu, đổi ảnh đại diện.
+
+  Ô EMAIL cố tình để chỉ đọc. Email đã xác minh bằng mã OTP lúc đăng ký, và là
+  thứ dùng để khôi phục mật khẩu cũng như tìm lại bài thi cũ — cho sửa tự do là
+  mở đường chiếm tài khoản người khác.
+
+  Khối thống kê hiện khác nhau theo vai trò: giáo viên thấy số đề và số phòng đã
+  tạo, học sinh thấy số lần đã đi thi.
+#}
+{% extends "base.html" %}
+
+{% block title %}Hồ sơ cá nhân{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Cùng khung 1080px, canh giữa như Lớp học / Thư viện / Ngân hàng / Phòng thi
+       (bỏ padding ngang của .container để mép trái trùng đúng các trang kia) */
+    .pf-wrap { max-width: var(--content-narrow); margin: 0 auto; padding-left: 0; padding-right: 0; }
+    .pf-card {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+        overflow: hidden; animation: fadeInUp 0.4s ease-out;
+    }
+    .pf-banner { background: var(--grad-primary); height: 84px; }
+    .pf-avatar-wrap {
+        position: relative; display: inline-block;
+        margin: -52px auto 0; cursor: pointer;
+    }
+    .pf-avatar, .pf-avatar-img {
+        width: 86px; height: 86px; border-radius: 50%;
+        border: 4px solid #fff; box-shadow: var(--shadow);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .pf-avatar { background: #fff; font-size: 2.4rem; color: var(--primary); }
+    .pf-avatar-img { object-fit: cover; background: #fff; display: block; }
+    .pf-avatar-default { background: none; display: block; overflow: hidden; }
+    .pf-avatar-cam {
+        position: absolute; right: 0; bottom: 0;
+        width: 28px; height: 28px; border-radius: 50%;
+        background: var(--primary); color: #fff; border: 2px solid #fff;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.78rem; transition: background 0.2s;
+    }
+    .pf-avatar-wrap:hover .pf-avatar-cam { background: var(--primary-dark); }
+    .pf-role {
+        display: inline-block; background: var(--primary-soft); color: var(--primary-dark);
+        border: 1px solid rgba(37,99,235,0.25); padding: 3px 14px; border-radius: 20px;
+        font-size: 0.8rem; font-weight: 700;
+    }
+    .pf-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); margin-top: 18px; }
+    .pf-stat {
+        background: var(--surface-2); border: 1px solid var(--border);
+        border-radius: 12px; padding: 14px; text-align: center;
+    }
+    .pf-stat .v { font-size: 1.5rem; font-weight: 800; color: var(--primary); line-height: 1; }
+    .pf-stat .l { font-size: 0.74rem; color: var(--text-muted); margin-top: 4px; }
+
+    .pf-tabs { display: flex; gap: 6px; border-bottom: 2px solid var(--border); margin-bottom: 18px; }
+    .pf-tab-btn {
+        padding: 9px 18px; border: none; background: transparent; cursor: pointer;
+        font-weight: 600; font-size: 0.9rem; color: var(--text-muted);
+        border-bottom: 2px solid transparent; margin-bottom: -2px;
+    }
+    .pf-tab-btn:hover { color: var(--primary-dark); }
+    .pf-tab-btn.active { color: var(--primary-dark); border-bottom-color: var(--primary); }
+    .pf-pane { display: none; }
+    .pf-pane.active { display: block; }
+
+    .pf-field { margin-bottom: 16px; }
+    .pf-field label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+    .pf-field .hint { font-size: 0.76rem; color: var(--text-muted); margin-top: 4px; }
+    .pf-readonly {
+        background: var(--surface-2); border: 1px solid var(--border); color: var(--text-muted);
+        border-radius: 10px; padding: 10px 14px; font-weight: 600;
+    }
+    .pf-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4 pf-wrap">
+    {% if not user %}
+        <div class="pf-card p-4 text-center"><h5 class="text-muted mb-0">Không tải được hồ sơ.</h5></div>
+    {% else %}
+    <div class="row g-3">
+        <!-- CỘT TRÁI: Tóm tắt -->
+        <div class="col-lg-4">
+            <div class="pf-card">
+                <div class="pf-banner"></div>
+                <div class="p-4 text-center">
+                    <form method="POST" action="{{ url_for('auth.cap_nhat_avatar') }}"
+                          enctype="multipart/form-data" id="avatarForm" data-skip-validate>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <label class="pf-avatar-wrap" title="Đổi ảnh đại diện">
+                            {% if user.avatar %}
+                            <img src="{{ url_for('static', filename=user.avatar) }}" alt="Ảnh đại diện" class="pf-avatar-img">
+                            {% else %}
+                            <svg class="pf-avatar pf-avatar-default" viewBox="0 0 86 86" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="43" cy="43" r="43" fill="#AEB6BF"/>
+                                <circle cx="43" cy="32" r="14" fill="#fff"/>
+                                <path d="M9 86 Q9 52 43 52 Q77 52 77 86 Z" fill="#fff"/>
+                            </svg>
+                            {% endif %}
+                            <span class="pf-avatar-cam"><i class="fas fa-camera"></i></span>
+                            <input type="file" name="avatar" id="avatarInput" hidden
+                                   accept="image/png,image/jpeg,image/gif,image/webp">
+                        </label>
+                    </form>
+                    <h4 class="mt-3 mb-1" style="color: var(--text-primary);">{{ user.ho_ten }}</h4>
+                    <span class="pf-role"><i class="fas fa-id-badge me-1"></i>{{ vai_tro }}</span>
+
+                    {% if stats %}
+                        {% if user.role in ('giao_vien', 'admin') %}
+                        <div class="pf-stats" style="grid-template-columns: repeat(2, 1fr);">
+                            <div class="pf-stat"><div class="v">{{ stats.so_de }}</div><div class="l">Đề đã tạo</div></div>
+                            <div class="pf-stat"><div class="v">{{ stats.so_phong }}</div><div class="l">Phòng thi đã mở</div></div>
+                        </div>
+                        {% else %}
+                        <div class="pf-stats" style="grid-template-columns: repeat(1, 1fr);">
+                            <div class="pf-stat"><div class="v">{{ stats.so_lan_thi }}</div><div class="l">Số lần thi</div></div>
+                        </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- CỘT PHẢI: Form chỉnh sửa -->
+        <div class="col-lg-8">
+            <div class="pf-card p-4">
+                <div class="pf-tabs">
+                    <button class="pf-tab-btn active" data-pane="info"><i class="fas fa-user-pen me-1"></i>Thông tin cá nhân</button>
+                    <button class="pf-tab-btn" data-pane="security"><i class="fas fa-lock me-1"></i>Đổi mật khẩu</button>
+                </div>
+
+                <!-- TAB THÔNG TIN -->
+                <div class="pf-pane active" id="pane-info">
+                    <form method="POST" action="{{ url_for('auth.cap_nhat_ho_so') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="row">
+                            <div class="col-md-6 pf-field">
+                                <label>Họ và tên <span class="text-danger">*</span></label>
+                                <input type="text" name="ho_ten" class="form-control-dark form-control" value="{{ user.ho_ten }}" required>
+                            </div>
+                            <div class="col-md-6 pf-field">
+                                <label>Số điện thoại</label>
+                                <input type="tel" name="sdt" class="form-control-dark form-control" value="{{ user.sdt or '' }}"
+                                       pattern="0[0-9]{9}" maxlength="10" inputmode="numeric"
+                                       title="Số điện thoại gồm 10 chữ số và bắt đầu bằng 0" placeholder="VD: 0901234567">
+                                <div class="hint">10 chữ số, bắt đầu bằng 0.</div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 pf-field">
+                                <label>Email</label>
+                                <div class="pf-readonly">{{ user.email }}</div>
+                            </div>
+                            <div class="col-md-6 pf-field">
+                                <label>Ngày sinh</label>
+                                <input type="date" name="ngay_sinh" class="form-control-dark form-control"
+                                       value="{% if user.ngay_sinh %}{{ user.ngay_sinh.strftime('%Y-%m-%d') }}{% endif %}">
+                            </div>
+                        </div>
+                        {% if user.role == 'hoc_sinh' %}
+                        <div class="row">
+                            <div class="col-md-6 pf-field">
+                                <label>Mã số sinh viên</label>
+                                <input type="text" name="ma_so_sv" class="form-control-dark form-control" value="{{ user.ma_so_sv or '' }}" placeholder="VD: 2001216789">
+                            </div>
+                            <div class="col-md-6 pf-field">
+                                <label>Lớp</label>
+                                <input type="text" name="lop" class="form-control-dark form-control" value="{{ user.lop or '' }}" placeholder="VD: CNTT01">
+                            </div>
+                        </div>
+                        {% endif %}
+                        <div class="row">
+                            <div class="col-md-6 pf-field">
+
+ 
+                            </div>
+                            <div class="col-md-6 pf-field">
+
+                            </div>
+                        </div>
+                        <div class="pf-actions">
+                            <button type="submit" class="btn-primary-sm"><i class="fas fa-floppy-disk"></i> Lưu thay đổi</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- TAB ĐỔI MẬT KHẨU -->
+                <div class="pf-pane" id="pane-security">
+                    <form method="POST" action="{{ url_for('auth.doi_mat_khau') }}" onsubmit="return kiemTraMatKhau()">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="pf-field">
+                            <label>Mật khẩu hiện tại <span class="text-danger">*</span></label>
+                            <input type="password" id="mat_khau_cu" name="mat_khau_cu" class="form-control-dark form-control" required>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 pf-field">
+                                <label>Mật khẩu mới <span class="text-danger">*</span></label>
+                                <input type="password" id="mat_khau_moi" name="mat_khau_moi" class="form-control-dark form-control" minlength="8" required>
+                                <div class="hint">Ít nhất 8 ký tự, gồm chữ IN HOA, chữ thường, chữ số và 1 ký tự đặc biệt (!@#$…).</div>
+                            </div>
+                            <div class="col-md-6 pf-field">
+                                <label>Xác nhận mật khẩu mới <span class="text-danger">*</span></label>
+                                <input type="password" id="xac_nhan" name="xac_nhan" class="form-control-dark form-control" minlength="8" required>
+                                <div id="mkLoi" class="hint" style="color: var(--danger); display:none;">Mật khẩu xác nhận không khớp.</div>
+                            </div>
+                        </div>
+                        <div class="pf-actions">
+                            <button type="submit" class="btn-primary-sm"><i class="fas fa-key"></i> Đổi mật khẩu</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.pf-tab-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.pf-tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.pf-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('pane-' + btn.dataset.pane).classList.add('active');
+    });
+});
+
+// Chọn ảnh xong là tự gửi luôn (không cần nút Lưu riêng)
+(function () {
+    var input = document.getElementById('avatarInput');
+    if (input) {
+        input.addEventListener('change', function () {
+            if (input.files && input.files.length) {
+                document.getElementById('avatarForm').submit();
+            }
+        });
+    }
+})();
+
+function kiemTraMatKhau() {
+    var moi = document.getElementById('mat_khau_moi').value;
+    var xn  = document.getElementById('xac_nhan').value;
+    var loi = document.getElementById('mkLoi');
+    if (moi !== xn) {
+        loi.style.display = 'block';
+        return false;
+    }
+    loi.style.display = 'none';
+    return true;
+}
+</script>
+{% endblock %}

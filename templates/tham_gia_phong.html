@@ -1,0 +1,142 @@
+{#
+  tham_gia_phong.html — FORM VÀO PHÒNG THI.
+
+  Hiện khác nhau tùy người vào:
+    Khách vãng lai   -> khai họ tên, MSSV, lớp, email.
+    Đã đăng nhập     -> chỉ phải gõ mật khẩu phòng (thông tin lấy từ tài khoản).
+    Phòng không mật khẩu + đã đăng nhập -> không thấy trang này, vào thẳng.
+
+  Phòng có gán lớp thì KHÔNG nhận khách vãng lai — bắt buộc đăng nhập, vì khách
+  tự gõ MSSV thì gõ mã của ai cũng được.
+#}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light only">
+    <title>Tham gia phòng thi - Khoa TT-TT</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/controls.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/square.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: #f4f7fb; color: #0f172a; min-height: 100vh;
+            display: flex; align-items: center; justify-content: center; padding: 30px 0;
+            font-family: 'Be Vietnam Pro', 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+        }
+        .join-card {
+            background: #ffffff;
+            border: 1px solid rgba(102,126,234,0.25);
+            border-radius: 20px; padding: 40px; max-width: 520px; width: 92%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        .room-title {
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; font-weight: 800;
+        }
+        .info-row {
+            display: flex; justify-content: space-between; padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9; font-size: 0.92rem;
+        }
+        .info-row span:first-child { color: #64748b; }
+        .info-row span:last-child { color: #0f172a; font-weight: 600; }
+        .form-label-dark { color: #64748b; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+        html { color-scheme: light; }
+        .form-control-dark {
+            background: #ffffff; border: 1px solid #e2e8f0;
+            color: #0f172a; -webkit-text-fill-color: #0f172a;
+            border-radius: 10px; padding: 11px 14px; width: 100%;
+        }
+        .form-control-dark::placeholder { color: #aeb6c2; font-weight: 400; }
+        .form-control-dark:focus {
+            outline: none; border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.15); background: #ffffff;
+        }
+        .btn-start {
+            background: linear-gradient(135deg, #0e7490, #16a34a); border: none; color: #0a0a0f;
+            padding: 14px; border-radius: 12px; font-weight: 800; width: 100%;
+            text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s; cursor: pointer;
+        }
+        .btn-start:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(17,153,142,0.4); }
+        .badge-soft {
+            background: rgba(102,126,234,0.15); color: #2563eb;
+            border: 1px solid rgba(102,126,234,0.3); padding: 4px 12px;
+            border-radius: 8px; font-size: 0.78rem; font-weight: 700;
+        }
+
+        /* ===== TỐI ƯU MÀN HÌNH ĐIỆN THOẠI ===== */
+        @media (max-width: 576px) {
+            .join-card { padding: 26px 20px; width: 94%; }
+            .btn-start { letter-spacing: 0.5px; padding: 13px; }
+            .info-row { font-size: 0.88rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="join-card">
+        <div class="text-center mb-4">
+            <span class="badge-soft mb-3 d-inline-block"><i class="fas fa-key me-1"></i>{{ phong.ma_phong }}</span>
+            <h3 class="room-title mb-1">{{ phong.ten_phong }}</h3>
+            <p class="text-muted small mb-0">{{ phong.mo_ta or 'Điền thông tin để vào phòng thi' }}</p>
+        </div>
+
+        <div class="mb-4">
+            <div class="info-row"><span><i class="fas fa-book me-2"></i>Môn học</span><span>{{ phong.ten_mon }}</span></div>
+            <div class="info-row"><span><i class="fas fa-file-lines me-2"></i>Đề thi</span><span>{{ phong.ten_de_thi }}</span></div>
+            <div class="info-row"><span><i class="fas fa-list-ol me-2"></i>Số câu</span><span>{{ phong.tong_so_cau }} câu</span></div>
+            <div class="info-row"><span><i class="fas fa-hourglass-half me-2"></i>Thời lượng</span><span>{{ phong.thoi_luong_lam_bai }} phút</span></div>
+        </div>
+
+        <form method="POST" action="/thi/{{ phong.ma_phong }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if yeu_cau_mat_khau %}
+            <div class="mb-3">
+                <label class="form-label-dark"><i class="fas fa-lock me-1"></i>Mật khẩu phòng <span class="text-danger">*</span></label>
+                <input type="text" name="mat_khau" class="form-control-dark" placeholder="Nhập mật khẩu giáo viên cung cấp" autofocus required>
+                {% if loi_mat_khau %}
+                <div class="text-danger small mt-2"><i class="fas fa-exclamation-circle me-1"></i>{{ loi_mat_khau }}</div>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if not da_dang_nhap %}
+            <div class="mb-3">
+                <label class="form-label-dark">Họ và tên <span class="text-danger">*</span></label>
+                <input type="text" name="ho_ten" class="form-control-dark" placeholder="Nguyễn Văn A" required>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label-dark">Mã số sinh viên <span class="text-danger">*</span></label>
+                    <input type="text" name="ma_so_sv" class="form-control-dark" placeholder="VD: 2001..." required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label-dark">Lớp</label>
+                    <input type="text" name="lop" class="form-control-dark" placeholder="VD: CNTT01">
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="form-label-dark">Email</label>
+                <input type="email" name="email" class="form-control-dark" placeholder="email@example.com">
+            </div>
+            {% endif %}
+            <button type="submit" class="btn-start">
+                {% if phong.can_duyet %}
+                    <i class="fas fa-paper-plane me-2"></i>Gửi yêu cầu vào phòng
+                {% else %}
+                    <i class="fas fa-play me-2"></i>Bắt đầu làm bài
+                {% endif %}
+            </button>
+            {% if phong.can_duyet %}
+            <p class="text-center text-muted small mt-3 mb-0">
+                <i class="fas fa-info-circle me-1"></i>Phòng này cần giáo viên duyệt trước khi vào thi
+            </p>
+            {% endif %}
+        </form>
+    </div>
+</body>
+</html>

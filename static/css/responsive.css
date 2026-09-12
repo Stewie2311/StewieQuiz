@@ -1,0 +1,187 @@
+/* ============================================================================
+   RESPONSIVE TOÀN CỤC — tối ưu hiển thị trên ĐIỆN THOẠI & MÁY TÍNH BẢNG
+   Mục tiêu: chữ không tràn, bố cục gọn, đẹp & chuyên nghiệp trên màn hình nhỏ.
+   Áp cho mọi trang dùng base.html (trang đứng riêng như lam_bai có CSS riêng).
+   ============================================================================ */
+
+/* --- An toàn chung: chặn tràn ngang, ảnh/iframe co theo khung --- */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+img, video, iframe, canvas, svg {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Tránh chữ tiếng Việt dài (URL, mã, tên file) làm vỡ layout ngang */
+p, li, td, th, span, div, h1, h2, h3, h4, h5, h6, a, label {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* Bảng đặt trong .table-responsive / .table-wrapper sẽ cuộn ngang mượt */
+.table-responsive,
+.table-wrapper {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ===========================================================================
+   TABLET & NHỎ HƠN ( <= 992px ) — navbar thu gọn (Bootstrap navbar-expand-lg)
+   =========================================================================== */
+@media (max-width: 991.98px) {
+    /* Menu thả xuống của navbar nổi: nền trắng gọn, có khoảng đệm, cuộn nếu dài */
+    .stewie-navbar .navbar-collapse {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+        max-height: calc(100vh - 110px);
+        overflow-y: auto;
+    }
+    /* Mỗi mục menu trải đều full chiều ngang cho dễ chạm */
+    .stewie-navbar .navbar-nav.mx-auto { flex-wrap: wrap; gap: 2px; }
+    .stewie-navbar .nav-item { width: 100%; }
+    .stewie-navbar .nav-item .nav-link {
+        width: 100%;
+        justify-content: flex-start;
+        font-size: 0.95rem !important;
+        padding: 11px 14px !important;
+        margin: 0 !important;
+        border-radius: 10px !important;
+    }
+    /* Hàng tài khoản: căn trái cùng các mục, không lệch phải */
+    .stewie-navbar .navbar-nav.align-items-center { width: 100%; align-items: flex-start !important; }
+    .stewie-navbar .nav-item .nav-link.stewie-user-pill {
+        width: 44px; height: 44px; margin: 6px 0 !important;
+    }
+    /* Dropdown tài khoản hiển thị trong luồng (không đè) cho gọn */
+    .stewie-navbar .dropdown-menu { width: 100%; }
+}
+
+/* ===========================================================================
+   ĐIỆN THOẠI LỚN & TABLET DỌC ( <= 768px )
+   =========================================================================== */
+@media (max-width: 768px) {
+    /* --- Khung nội dung: bớt padding 2 bên cho rộng rãi --- */
+    .main-layout > .main-content {
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 70px;
+    }
+
+    /* --- Thang tiêu đề: co lại cho cân đối màn hình nhỏ --- */
+    h1, .h1 { font-size: 1.6rem; }
+    h2, .h2 { font-size: 1.3rem; }
+    h3, .h3 { font-size: 1.15rem; }
+    h4, .h4 { font-size: 1.02rem; }
+
+    .section-header h2 { font-size: 1.18rem; }
+    .dashboard-header h1 { font-size: 1.4rem; }
+
+    /* --- Lưới thống kê / dashboard: 1 cột --- */
+    .stat-grid { grid-template-columns: 1fr; gap: 14px; }
+    .dashboard-grid { grid-template-columns: 1fr; }
+    .stat-value { font-size: 2rem; }
+    .stat-icon { font-size: 1.6rem; }
+    .stat-card { padding: 18px; }
+
+    /* --- Thẻ chung: bớt padding --- */
+    .card-section,
+    .section-card,
+    .main-func-card { padding: 18px; }
+    .card-section h3 { font-size: 1.02rem; }
+
+    /* --- Thanh công cụ danh sách: xuống dòng & full chiều ngang --- */
+    .list-toolbar { flex-direction: column; align-items: stretch; }
+    .list-toolbar .lt-actions { width: 100%; }
+    .list-toolbar .lt-actions > * { flex: 1; justify-content: center; }
+
+    /* --- Bảng: CHO PHÉP cuộn ngang (ghi đè overflow:hidden của khung) --- */
+    .table-wrapper {
+        overflow-x: auto;
+        border-radius: var(--radius);
+    }
+    .data-table { font-size: 0.84rem; }
+    .data-table thead th { padding: 10px 12px; font-size: 0.68rem; }
+    .data-table tbody td { padding: 11px 12px; }
+
+    /* --- Nút thao tác trong bảng: cho xuống dòng, không tràn --- */
+    .tbl-actions { flex-wrap: wrap; }
+
+    /* --- Bảng Bootstrap (.table) cũng cho cuộn ngang khi rộng --- */
+    .table { font-size: 0.86rem; }
+
+    /* --- Hàng tùy chọn (Bước 3 tạo câu hỏi): mỗi ô full chiều ngang --- */
+    .exam-opts { flex-direction: column; }
+    .exam-opts .opt-field { flex: 1 1 100%; width: 100%; }
+
+    /* --- Bảng chọn số câu theo chương: gọn lại cho vừa màn nhỏ --- */
+    .chapter-header,
+    .chapter-row {
+        grid-template-columns: 1.5fr 1fr 1fr 1fr;
+        gap: 6px;
+    }
+    .chapter-header { font-size: 0.7rem; }
+    .chapter-header > div { line-height: 1.2; }
+    .chapter-row span { font-size: 0.82rem; }
+    .chapter-row input { padding: 7px 4px; font-size: 0.85rem; }
+
+    /* --- Tổng số câu: không tràn --- */
+    .total-questions-box { width: 100%; justify-content: space-between; white-space: normal; }
+
+    /* --- Khu tải file PDF: bớt padding --- */
+    .file-upload-wrapper { padding: 22px 14px; }
+
+    /* --- Nav pills (Tất cả phòng / Phòng của tôi...): cho xuống dòng --- */
+    .custom-pills { flex-wrap: wrap; }
+    .custom-pills .nav-link { padding: 8px 14px; font-size: 0.88rem; }
+
+    /* --- Toast/flash: dàn 2 mép --- */
+    .flash-container { left: 10px; right: 10px; max-width: none; top: 76px; }
+
+    /* --- Tiêu đề hero & lead trên trang chủ --- */
+    .hero-wrap h1 { font-size: 1.9rem !important; }
+    .hero-wrap .lead, .hero-wrap p.lead { font-size: 1rem !important; }
+    .hero-icon { width: 64px; height: 64px; font-size: 1.9rem; }
+
+    /* --- Modal: chừa mép màn hình --- */
+    .modal-dialog { margin: 12px; }
+}
+
+/* ===========================================================================
+   ĐIỆN THOẠI NHỎ ( <= 480px )
+   =========================================================================== */
+@media (max-width: 480px) {
+    .main-layout > .main-content {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    h1, .h1 { font-size: 1.4rem; }
+    h2, .h2 { font-size: 1.2rem; }
+
+    /* Logo navbar nhỏ lại để vừa cùng nút mở menu */
+    .stewie-navbar .brand-text,
+    .stewie-navbar .brand-accent { font-size: 1.25rem; }
+
+    .card-section,
+    .section-card,
+    .main-func-card { padding: 15px; }
+
+    .stat-value { font-size: 1.8rem; }
+
+    /* Nút chữ to (đăng nhập/đăng ký) gọn lại */
+    .btn-auth { font-size: 0.92rem; padding: 11px; }
+    .btn, .btn-primary, .btn-success, .btn-primary-sm, .btn-tao-phong {
+        font-size: 0.88rem;
+    }
+
+    /* Bảng chương: hàng số câu sát hơn nữa */
+    .chapter-header, .chapter-row { gap: 4px; }
+    .chapter-row input { padding: 6px 2px; }
+
+    /* Hero gọn hơn */
+    .hero-wrap h1 { font-size: 1.65rem !important; }
+    .hero-cta .btn-pill { width: 100%; justify-content: center; }
+
+    /* Badge/mã phòng không quá to */
+    .badge, .badge-count { font-size: 0.72rem; }
+}

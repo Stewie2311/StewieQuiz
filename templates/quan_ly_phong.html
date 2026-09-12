@@ -1,0 +1,823 @@
+{#
+  quan_ly_phong.html — BẢNG ĐIỀU KHIỂN LÚC COI THI.
+
+  Gồm các tab: danh sách thí sinh, hàng chờ duyệt, điểm danh theo lớp.
+
+  `{% extends layout|default("base.html") %}` — layout do server truyền xuống,
+  không cố định. Khi trang này được nạp bằng AJAX (tráo qua lại với màn hình
+  Giám sát, xem static/js/room-nav.js), server truyền layout rỗng để không kèm
+  thêm navbar thứ hai vào giữa trang.
+
+  Hàng chờ duyệt tự cập nhật: trang hỏi lại /cho_duyet_data vài giây một lần,
+  nên thí sinh mới xin vào là hiện ra ngay, giáo viên không phải bấm F5 giữa lúc
+  đang coi thi.
+#}
+{% extends layout|default("base.html") %}
+
+{% block title %}Quản Lý Phòng Thi - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<!-- Socket.IO nạp ở <head> để sẵn sàng cho tab Giám sát khi tráo AJAX -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+{% endblock %}
+{% block content %}
+<div id="roomHost">
+<style>
+    /* Font giống trang Đăng nhập (Be Vietnam Pro) */
+    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
+
+    .qlp-page { font-family: 'Be Vietnam Pro', 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif; }
+
+    /* ===== Khối thông tin phòng thi (2 hàng thẳng, có viền bảng) ===== */
+    .room-info-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 18px;
+        padding: 14px;
+        margin-bottom: 18px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    /* Thanh đầu: tên đề thi + thao tác nhanh */
+    .ri-head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+    }
+    .ri-head-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .ri-head-title i { color: #2563eb; }
+    .ri-head-title .lbl { color: #64748b; font-weight: 600; }
+    .ri-head-title .val { color: #0f172a; font-weight: 800; }
+    .ri-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .ri-copy-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px; flex-shrink: 0;
+        background: #ffffff; color: #2563eb;
+        border: 1px solid #bfdbfe; border-radius: 8px !important;
+        cursor: pointer; transition: all 0.15s ease;
+    }
+    .ri-copy-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .ri-link-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: #ffffff; color: #2563eb;
+        border: 1px solid #bfdbfe; border-radius: 8px !important;
+        padding: 5px 12px; font-weight: 700;
+        cursor: pointer; transition: all 0.15s ease;
+    }
+    .ri-link-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .ri-copy-btn.copied, .ri-link-btn.copied { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+    /* Lưới thông tin: 4 cột × 2 hàng, đường kẻ như bảng */
+    .ri-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1px;
+        background: #e2e8f0;              /* màu đường kẻ giữa các ô */
+        border: 1px solid #e2e8f0;       /* viền ngoài */
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .ri-cell {
+        background: #ffffff;
+        padding: 10px 14px;
+        min-height: 56px;
+        display: flex; flex-direction: column; justify-content: center;
+        gap: 4px; transition: background 0.18s ease;
+    }
+    .ri-cell:hover { background: #f8fafc; }
+    .ri-label {
+        color: #64748b; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        display: flex; align-items: center; gap: 5px;
+    }
+    .ri-label i { color: #94a3b8; }
+    .ri-value {
+        color: #0f172a; font-weight: 700;
+        display: flex; align-items: center; flex-wrap: wrap; gap: 5px; line-height: 1.3;
+    }
+    .ri-value-code { display: flex; align-items: center; gap: 8px; }
+    /* Nhãn mã đề / lớp: nền nhạt trung tính, chữ đậm (không xanh dương) */
+    .ri-tag {
+        display: inline-block;
+        background: #f1f5f9; color: #0f172a;
+        border: 1px solid #e2e8f0; border-radius: 6px !important;
+        padding: 1px 7px; font-weight: 700;
+    }
+    @media (max-width: 860px) { .ri-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .ri-grid { grid-template-columns: 1fr; } }
+
+    /* ===== Bố cục ngang: thông tin bên trái, nội dung bên phải ===== */
+    .qlp-layout {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 18px;
+        align-items: start;
+    }
+    .qlp-side { position: sticky; top: 16px; }
+    .qlp-side .room-info-card { margin-bottom: 0; }
+    .qlp-side .ri-grid { grid-template-columns: 1fr; }   /* xếp dọc trong cột trái */
+    .qlp-main { min-width: 0; }                          /* cho bảng co lại, không tràn */
+    @media (max-width: 992px) {
+        .qlp-layout { grid-template-columns: 1fr; }
+        .qlp-side { position: static; }
+    }
+
+    /* ===== Khối "Thí sinh chờ duyệt" thu gọn thông minh ===== */
+    .cho-duyet {
+        background: #fffdf5;
+        border: 1px solid rgba(217,119,6,0.28);
+        border-radius: 14px !important;   /* !important để thắng square.css */
+        margin-bottom: 18px;
+        overflow: hidden;
+        transition: border-color 0.2s ease;
+    }
+    .cho-duyet.has-pending { border-color: rgba(217,119,6,0.55); box-shadow: 0 6px 20px rgba(217,119,6,0.10); }
+    .cd-bar {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 11px 16px; cursor: default;
+    }
+    .cho-duyet.has-pending .cd-bar { cursor: pointer; }
+    .cd-bar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .cd-ic {
+        width: 38px; height: 30px; flex-shrink: 0;
+        display: inline-flex; align-items: center; justify-content: center; gap: 3.5px;
+        border-radius: 999px !important;    /* BO TRÒN hẳn (pill) — thắng square.css */
+        background: rgba(217,119,6,0.12); color: #d97706;
+    }
+    .cho-duyet:not(.has-pending) .cd-ic { background: rgba(22,163,74,0.12); color: #16a34a; }
+    /* Icon = 3 DẤU CHẤM nảy lên LẦN LƯỢT (thay icon đồng hồ vuông cũ) */
+    .cd-ic .cd-dot {
+        width: 5px; height: 5px; border-radius: 50% !important;
+        background: currentColor; display: inline-block;
+        animation: cdDotJump 1s infinite ease-in-out both;
+    }
+    .cd-ic .cd-dot:nth-child(1) { animation-delay: 0s; }
+    .cd-ic .cd-dot:nth-child(2) { animation-delay: 0.16s; }
+    .cd-ic .cd-dot:nth-child(3) { animation-delay: 0.32s; }
+    @keyframes cdDotJump {
+        0%, 70%, 100% { transform: translateY(0); }
+        35%           { transform: translateY(-5px); }
+    }
+    @media (prefers-reduced-motion: reduce) { .cd-ic .cd-dot { animation: none; } }
+    .cd-title { font-weight: 700; color: #1f2937; font-size: 0.95rem; }
+    .cd-status { color: #6b7280; font-size: 0.8rem; }
+    .cd-toggle {
+        background: transparent; border: none; color: #d97706; cursor: pointer;
+        width: 30px; height: 30px; border-radius: 8px !important;
+        display: inline-flex; align-items: center; justify-content: center;
+        transition: transform 0.2s ease, background 0.15s ease;
+    }
+    .cd-toggle:hover { background: rgba(217,119,6,0.12); }
+    .cho-duyet.open .cd-toggle { transform: rotate(180deg); }
+    .cd-body { padding: 0 16px 14px; }
+
+    /* ===== Thanh công cụ lọc / tìm kiếm phía trên bảng ===== */
+    .ts-toolbar {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        margin-bottom: 16px;
+    }
+    .ts-search {
+        position: relative; flex: 1 1 260px; max-width: 340px; min-width: 200px;
+    }
+    .ts-search i {
+        position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+        color: #94a3b8; font-size: 0.82rem; pointer-events: none;
+    }
+    .ts-search input {
+        width: 100%; padding: 8px 12px 8px 34px;
+        border: 1.5px solid #e2e8f0; border-radius: 10px !important;
+        background: #f8fafc; color: #0f172a; font-size: 0.85rem; outline: none;
+        transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    }
+    .ts-search input:focus {
+        border-color: #2563eb; background: #fff;
+        box-shadow: 0 0 0 3px rgba(37,99,235,0.10);
+    }
+    .ts-filter {
+        padding: 8px 32px 8px 12px;
+        border: 1.5px solid #e2e8f0; border-radius: 10px !important;
+        background: #f8fafc; color: #0f172a; font-size: 0.85rem; font-weight: 600;
+        cursor: pointer; outline: none;
+    }
+    .ts-filter:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.10); }
+    .ts-count { color: #64748b; font-size: 0.82rem; margin-left: auto; font-weight: 600; }
+
+    /* ===== Chuyển trang mượt (Cài đặt phòng <-> Giám sát) ===== */
+    @keyframes pageFadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: none; }
+    }
+    .qlp-page { animation: pageFadeIn 0.32s ease; }
+    body.page-leaving .qlp-page {
+        opacity: 0;
+        transform: translateY(-8px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .admin-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 18px;
+        padding: 22px 24px;
+        margin-bottom: 18px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    
+    /* Bảng danh sách — đồng bộ với .data-table dùng chung toàn site */
+    .admin-card .table-responsive {
+        border: 1px solid var(--table-border); border-radius: var(--radius-lg);
+        overflow: hidden;
+    }
+    .table-dark-custom { width: 100%; border-collapse: collapse; color: var(--text-secondary); font-size: 0.875rem; }
+    .table-dark-custom thead th {
+        background: transparent; color: var(--text-primary);
+        padding: 13px 16px; font-weight: 700; font-size: 0.96rem;
+        border: 1px solid var(--table-border);
+        text-align: left; white-space: nowrap;
+    }
+    .table-dark-custom tbody td {
+        background: transparent; padding: 14px 16px; vertical-align: middle;
+        color: #374151; font-size: 0.88rem; font-weight: 500;
+        border: 1px solid var(--table-border); border-radius: 0;
+    }
+    .table-dark-custom tbody tr { transition: background 0.18s ease; }
+    .table-dark-custom tbody tr:hover td { background: var(--table-hover); }
+
+    /* Badge trạng thái thí sinh (Đang làm bài / Đã làm bài / Chờ duyệt...) */
+    .ts-badge {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 4px 11px; border-radius: 999px; font-size: 0.78rem; font-weight: 700;
+        white-space: nowrap; border: 1px solid transparent;
+    }
+    .ts-badge.done  { background: rgba(22,163,74,0.10);  color: #16a34a; border-color: rgba(22,163,74,0.30); }
+    .ts-badge.doing { background: rgba(37,99,235,0.10);  color: #2563eb; border-color: rgba(37,99,235,0.30); }
+    .ts-badge.doing i { animation: tsPulse 1.5s ease-in-out infinite; }
+    @keyframes tsPulse { 50% { opacity: 0.35; } }
+    .ts-badge.wait  { background: rgba(217,119,6,0.10);  color: #d97706; border-color: rgba(217,119,6,0.30); }
+    .ts-badge.reject{ background: rgba(220,38,38,0.10);  color: #dc2626; border-color: rgba(220,38,38,0.30); }
+
+    /* Tab Thí sinh / Điểm danh — kiểu tab nhỏ nền trắng bo viền (giống Thư viện) */
+    .dd-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+    .dd-tab {
+        display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+        padding: 10px 20px; font-weight: 600; color: var(--text-muted);
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 10px !important;
+        transition: color .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .dd-tab:hover { color: var(--primary-dark); background: var(--primary-softer); }
+    .dd-tab.active { color: var(--primary-dark); background: var(--primary-soft); border-color: rgba(37,99,235,0.3); }
+
+    /* Chip lớp đã gán */
+    .dd-lop-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        background: var(--primary-softer); color: var(--text-primary);
+        border: 1px solid var(--border-strong); border-radius: 30px;
+        padding: 7px 8px 7px 16px; font-weight: 600; font-size: 0.9rem;
+    }
+    .dd-chip-x {
+        background: transparent; border: none; cursor: pointer;
+        color: #dc2626; width: 24px; height: 24px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        transition: background .15s ease;
+    }
+    .dd-chip-x:hover { background: rgba(220,38,38,.12); }
+
+    /* Tab chuyển Cài đặt phòng <-> Giám sát — kiểu tab nhỏ nền trắng bo viền */
+    .rp-nav-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+    .rp-nav-tab {
+        display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+        padding: 10px 20px; font-weight: 600; color: var(--text-muted);
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 10px !important;
+        transition: color .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .rp-nav-tab:hover { color: var(--primary-dark); background: var(--primary-softer); }
+    .rp-nav-tab.active { color: var(--primary-dark); background: var(--primary-soft); border-color: rgba(37,99,235,0.3); }
+
+    /* ===== Đồng nhất cỡ chữ toàn trang về 0.8rem (giữ icon lớn .fs-1) ===== */
+    .qlp-page,
+    .qlp-page *:not(.fs-1) { font-size: 0.8rem !important; }
+</style>
+<div class="container py-4 qlp-page room-container" style="max-width: 1440px;">
+
+    <!-- Chuyển qua lại Cài đặt phòng / Giám sát -->
+    <div class="rp-nav-tabs">
+        <a href="{{ url_for('phong_thi.quan_ly_phong', phong_id=phong.id) }}" class="rp-nav-tab active">
+            <i class="fas fa-gear me-2"></i> Cài đặt phòng
+        </a>
+        <a href="{{ url_for('phong_thi.giam_sat_phong', phong_id=phong.id) }}" class="rp-nav-tab">
+            <i class="fas fa-video me-2"></i> Giám sát
+        </a>
+    </div>
+
+    <!-- Bố cục ngang: bên trái = bảng thông tin, bên phải = chờ duyệt + danh sách -->
+    <div class="qlp-layout">
+    <aside class="qlp-side">
+    <div class="room-info-card">
+        <!-- Thanh đầu: tên đề thi -->
+        <div class="ri-head">
+            <div class="ri-head-title">
+                <i class="fas fa-file-alt"></i>
+                <span class="lbl">Đề thi:</span>
+                <span class="val">{{ phong.ten_mon }}</span>
+            </div>
+        </div>
+
+        <!-- Lưới thông tin: 4 cột × 2 hàng thẳng, có viền bảng -->
+        <div class="ri-grid">
+            <div class="ri-cell">
+                <div class="ri-label"><i class="fas fa-hashtag"></i> Mã phòng</div>
+                <div class="ri-value ri-value-code">
+                    <span id="maPhongText">{{ phong.ma_phong }}</span>
+                    <button type="button" class="ri-copy-btn" title="Copy mã phòng"
+                            onclick="copyText('{{ phong.ma_phong }}', this)">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="ri-cell">
+                <div class="ri-label"><i class="fas fa-lock"></i> Mật khẩu</div>
+                <div class="ri-value">{{ phong.mat_khau if phong.mat_khau else 'Không có' }}</div>
+            </div>
+            <div class="ri-cell">
+                <div class="ri-label"><i class="fas fa-door-open"></i> Giờ mở phòng</div>
+                <div class="ri-value">{{ phong.thoi_gian_mo_phong }}</div>
+            </div>
+            <div class="ri-cell">
+                <div class="ri-label"><i class="fas fa-play-circle"></i> Giờ bắt đầu thi</div>
+                <div class="ri-value">{{ phong.thoi_gian_bat_dau }}</div>
+            </div>
+
+            <div class="ri-cell">
+                <div class="ri-label"><i class="fas fa-hourglass-half"></i> Thời lượng</div>
+                <div class="ri-value">{{ phong.thoi_luong_lam_bai }} phút</div>
+            </div>
+            <div class="ri-cell">
+                <div class="ri-label"><i class="fas fa-list-ol"></i> Số câu hỏi</div>
+                <div class="ri-value">{{ phong.tong_so_cau }} câu</div>
+            </div>
+            <div class="ri-cell">
+                <div class="ri-label"><i class="fas fa-file-alt"></i> Mã đề</div>
+                <div class="ri-value">
+                    {% for d in bo_de %}
+                        <span class="ri-tag">{{ d.ma_de }}</span>
+                    {% endfor %}
+                    {% if bo_de and bo_de|length > 1 %}
+                        <span class="text-muted"><i class="fas fa-shuffle me-1"></i>ngẫu nhiên</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="ri-cell">
+                <div class="ri-label"><i class="fas fa-school"></i> Lớp dự thi</div>
+                <div class="ri-value">
+                    {% if diem_danh.lop_da_gan %}
+                        {% for l in diem_danh.lop_da_gan %}
+                            <span class="ri-tag">{{ l.ten_lop }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">Chưa gán lớp</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    </aside><!-- /qlp-side -->
+
+    <main class="qlp-main">
+
+    <!-- Ô CHỜ DUYỆT — thu gọn thành banner mỏng khi không có ai chờ / vào tự động -->
+    <div class="cho-duyet" id="choDuyetCard"
+         data-can-duyet="{{ '1' if phong.can_duyet else '0' }}"
+         style="{% if phong.trang_thai == 'da_dong' %}display:none;{% endif %}">
+        <div class="cd-bar" id="cdBar">
+            <div class="cd-bar-left">
+                <span class="cd-ic"><span class="cd-dot"></span><span class="cd-dot"></span><span class="cd-dot"></span></span>
+                <span class="cd-title">Thí sinh chờ duyệt</span>
+                <span class="badge bg-warning text-dark" id="choDuyetBadge">0</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="cd-status" id="cdStatus">
+                    {% if phong.can_duyet %}<i class="fas fa-circle-info me-1"></i>Duyệt thủ công · tự cập nhật{% else %}<i class="fas fa-bolt me-1"></i>Vào thi tự động (không cần duyệt){% endif %}
+                </span>
+                <button type="button" class="cd-toggle" id="cdToggle" style="display:none;" title="Mở / thu gọn">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+        </div>
+        <div class="cd-body" id="cdBody" style="display:none;">
+            <div id="choDuyetList" class="row g-2">
+                <div class="col-12 text-center text-muted py-2" id="choDuyetEmpty">
+                    <i class="fas fa-circle-check me-1 text-success"></i>Hiện chưa có thí sinh nào chờ duyệt.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB: Thí sinh / Điểm danh -->
+    <div class="dd-tabs mb-3">
+        <button type="button" class="dd-tab active" data-tab="thisinh">
+            <i class="fas fa-users me-1"></i> Danh sách Thí sinh
+        </button>
+        <button type="button" class="dd-tab" data-tab="diemdanh">
+            <i class="fas fa-clipboard-check me-1"></i> Điểm danh theo lớp
+        </button>
+    </div>
+
+    <div id="pane-thisinh" class="dd-pane">
+    <div class="admin-card">
+        <h4 class="fw-bold text-dark mb-3"><i class="fas fa-users me-2" style="color: #2563eb;"></i>Danh sách thí sinh tham gia phòng thi</h4>
+
+        <!-- Thanh công cụ tìm kiếm nhanh -->
+        <div class="ts-toolbar">
+            <div class="ts-search">
+                <i class="fas fa-search"></i>
+                <input type="text" id="tsSearch" placeholder="Tìm theo họ tên hoặc mã sinh viên…" autocomplete="off">
+            </div>
+            <span class="ts-count" id="tsCount"></span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table-dark-custom" id="tsTable">
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        <th>Họ và Tên</th>
+                        <th>Mã Sinh Viên</th>
+                        <th>Lớp</th>
+                        <th>Trạng thái</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if thi_sinhs %}
+                        {% for ts in thi_sinhs %}
+                        <tr class="ts-row"
+                            data-name="{{ ts.ho_ten|lower }}"
+                            data-mssv="{{ (ts.ma_so_sv or '')|lower }}">
+                            <td class="ts-stt">{{ loop.index }}</td>
+                            <td class="fw-bold">{{ ts.ho_ten }}</td>
+                            <td class="text-muted">{{ ts.ma_so_sv }}</td>
+                            <td>{{ ts.lop if ts.lop else '—' }}</td>
+                            <td>
+                                {% if ts.da_nop_bai %}
+                                    <span class="ts-badge done"><i class="fas fa-circle-check"></i> Đã làm bài</span>
+                                {% elif ts.trang_thai == 'da_duyet' %}
+                                    <span class="ts-badge doing"><i class="fas fa-pen-to-square"></i> Đang làm bài</span>
+                                {% elif ts.trang_thai == 'cho_duyet' %}
+                                    <span class="ts-badge wait"><i class="fas fa-hourglass-half"></i> Chờ duyệt</span>
+                                {% elif ts.trang_thai == 'bi_tu_choi' %}
+                                    <span class="ts-badge reject"><i class="fas fa-ban"></i> Bị từ chối</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST"
+                                      action="{{ url_for('phong_thi.xoa_thi_sinh', phong_id=phong.id, thi_sinh_id=ts.id) }}"
+                                      class="d-inline"
+                                      onsubmit="return confirm('Xóa thí sinh {{ ts.ho_ten }} khỏi phòng? Toàn bộ bài làm của thí sinh này sẽ bị xóa.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-user-times me-1"></i> Xóa khỏi phòng
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="fas fa-user-graduate fs-1 mb-3 opacity-50"></i>
+                                <h5>Chưa có sinh viên nào tham gia phòng thi này</h5>
+                                <p>Hãy gửi <strong>Mã Phòng</strong> cho sinh viên để họ truy cập</p>
+                            </td>
+                        </tr>
+                    {% endif %}
+                    <tr id="tsNoResult" style="display:none;">
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            <i class="fas fa-filter-circle-xmark me-1"></i>Không tìm thấy thí sinh phù hợp bộ lọc.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div><!-- /pane-thisinh -->
+
+    <!-- ============ PANE: ĐIỂM DANH ============ -->
+    <div id="pane-diemdanh" class="dd-pane" style="display:none;">
+
+        <!-- Gán lớp dự thi -->
+        <div class="admin-card">
+            <h4 class="fw-bold text-dark mb-3"><i class="fas fa-school me-2" style="color:#2563eb;"></i>Lớp dự thi (gán để điểm danh)</h4>
+            <form method="POST" action="{{ url_for('phong_thi.gan_lop', phong_id=phong.id) }}"
+                  class="d-flex gap-2 flex-wrap align-items-center mb-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if lop_co_the_gan %}
+                    <select name="lop_id" class="form-select" style="max-width:340px;" required>
+                        <option value="">-- Chọn lớp để gán --</option>
+                        {% for l in lop_co_the_gan %}
+                            <option value="{{ l.id }}">{{ l.ten_lop }} ({{ l.si_so }} SV)</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-primary fw-bold px-3">
+                        <i class="fas fa-plus me-1"></i> Gán lớp
+                    </button>
+                {% else %}
+                    <span class="text-muted">
+                        {% if diem_danh.lop_da_gan %}Đã gán hết các lớp của bạn.{% else %}Bạn chưa có lớp nào. <a href="{{ url_for('lop.danh_sach_lop') }}">Tạo lớp & thêm sinh viên</a> trước.{% endif %}
+                    </span>
+                {% endif %}
+            </form>
+
+            {% if diem_danh.lop_da_gan %}
+            <div class="d-flex flex-wrap gap-2">
+                {% for l in diem_danh.lop_da_gan %}
+                <span class="dd-lop-chip">
+                    <i class="fas fa-users me-1"></i>{{ l.ten_lop }}
+                    <span class="text-muted">· {{ l.si_so }} SV</span>
+                    <form method="POST" action="{{ url_for('phong_thi.bo_lop', phong_id=phong.id, lop_id=l.id) }}"
+                          class="d-inline" onsubmit="return confirm('Bỏ gán lớp {{ l.ten_lop }} khỏi phòng?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="dd-chip-x" title="Bỏ gán"><i class="fas fa-times"></i></button>
+                    </form>
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Bảng điểm danh -->
+        <div class="admin-card">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <h4 class="fw-bold text-dark mb-0"><i class="fas fa-clipboard-check me-2" style="color:#2563eb;"></i>Điểm danh</h4>
+                {% if diem_danh.roster %}
+                <div class="d-flex gap-3 align-items-center flex-wrap">
+                    <span><strong>{{ diem_danh.tong }}</strong> <span class="text-muted">sĩ số</span></span>
+                    <span class="text-success"><strong>{{ diem_danh.co_mat }}</strong> có mặt</span>
+                    <span class="text-danger"><strong>{{ diem_danh.vang }}</strong> vắng</span>
+                    <span class="text-primary"><strong>{{ diem_danh.da_nop }}</strong> đã nộp</span>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if diem_danh.roster %}
+            <div class="table-responsive">
+                <table class="table-dark-custom">
+                    <thead>
+                        <tr>
+                            <th>STT</th>
+                            <th>MSSV</th>
+                            <th>Họ và tên</th>
+                            <th>Lớp</th>
+                            <th>Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in diem_danh.roster %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td class="text-muted">{{ r.ma_so_sv }}</td>
+                            <td class="fw-bold">{{ r.ho_ten }}</td>
+                            <td>{{ r.ten_lop }}</td>
+                            <td>{{ r.nhan }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-clipboard-list fs-1 mb-3 opacity-50 d-block"></i>
+                <h5>Chưa có lớp nào được gán</h5>
+                <p>Gán ít nhất một lớp ở trên để điểm danh theo danh sách sinh viên.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Thí sinh ngoài danh sách lớp -->
+        {% if diem_danh.ngoai_ds %}
+        <div class="admin-card" style="border-color: rgba(217,119,6,.4);">
+            <h4 class="fw-bold text-dark mb-2">
+                <i class="fas fa-user-question me-2" style="color:#d97706;"></i>Ngoài danh sách lớp
+                <span class="badge bg-warning text-dark ms-1">{{ diem_danh.ngoai_ds|length }}</span>
+            </h4>
+            <p class="text-muted small mb-3">Các thí sinh đã vào phòng nhưng MSSV không thuộc lớp nào được gán.</p>
+            <div class="table-responsive">
+                <table class="table-dark-custom">
+                    <thead>
+                        <tr><th>STT</th><th>MSSV</th><th>Họ và tên</th><th>Trạng thái</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for t in diem_danh.ngoai_ds %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td class="text-muted">{{ t.ma_so_sv or '—' }}</td>
+                            <td class="fw-bold">{{ t.ho_ten }}</td>
+                            <td>{% if t.da_nop %}Đã nộp{% else %}Có mặt{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+    </div><!-- /pane-diemdanh -->
+
+    </main><!-- /qlp-main -->
+    </div><!-- /qlp-layout -->
+
+</div>
+<script>
+var PHONG_ID   = {{ phong.id }};
+var PHONG_DONG = {{ 'true' if phong.trang_thai == 'da_dong' else 'false' }};
+
+// ----- Copy mã phòng / link thi (thao tác nhanh) -----
+function _fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+}
+function copyText(text, btn) {
+    function done() {
+        if (!btn) return;
+        btn.classList.add('copied');
+        const ic = btn.querySelector('i');
+        const old = ic ? ic.className : null;
+        if (ic) ic.className = 'fas fa-check';
+        setTimeout(function() {
+            btn.classList.remove('copied');
+            if (ic && old) ic.className = old;
+        }, 1400);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function() { _fallbackCopy(text); done(); });
+    } else {
+        _fallbackCopy(text); done();
+    }
+}
+
+// ----- Tìm kiếm nhanh danh sách thí sinh (chỉ ẩn/hiện hàng, không đụng dữ liệu) -----
+(function initLocThiSinh() {
+    const search  = document.getElementById('tsSearch');
+    const table   = document.getElementById('tsTable');
+    if (!search || !table) return;
+    const rows     = Array.from(table.querySelectorAll('tr.ts-row'));
+    const noResult = document.getElementById('tsNoResult');
+    const countEl  = document.getElementById('tsCount');
+
+    function apply() {
+        const q = search.value.trim().toLowerCase();
+        let visible = 0, stt = 0;
+        rows.forEach(function(r) {
+            const show = !q || (r.dataset.name || '').includes(q) || (r.dataset.mssv || '').includes(q);
+            r.style.display = show ? '' : 'none';
+            if (show) {
+                visible++;
+                const c = r.querySelector('.ts-stt');
+                if (c) c.textContent = ++stt;   // đánh lại STT theo kết quả đang hiển thị
+            }
+        });
+        if (noResult) noResult.style.display = (rows.length && visible === 0) ? '' : 'none';
+        if (countEl)  countEl.textContent = rows.length ? (visible + '/' + rows.length + ' thí sinh') : '';
+    }
+    search.addEventListener('input', apply);
+    apply();
+})();
+
+// ----- Chuyển tab Thí sinh / Điểm danh -----
+function chonTab(name) {
+    document.querySelectorAll('.dd-tab').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.tab === name);
+    });
+    document.querySelectorAll('.dd-pane').forEach(function(p) {
+        p.style.display = (p.id === 'pane-' + name) ? '' : 'none';
+    });
+}
+document.querySelectorAll('.dd-tab').forEach(function(b) {
+    b.addEventListener('click', function() {
+        chonTab(b.dataset.tab);
+        const u = new URL(window.location);
+        u.searchParams.set('tab', b.dataset.tab);
+        history.replaceState(null, '', u);
+    });
+});
+// Mở đúng tab khi quay lại từ thao tác gán/bỏ lớp (?tab=diemdanh)
+if (new URLSearchParams(window.location.search).get('tab') === 'diemdanh') {
+    chonTab('diemdanh');
+}
+
+function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : s;
+    return d.innerHTML;
+}
+
+function theChoDuyet(ts) {
+    return `<div class="col-md-6 col-lg-4" id="cd-${ts.id}">
+        <div style="background:#fffbeb;border:1px solid rgba(217,119,6,.3);border-radius:12px;padding:14px;">
+            <div class="fw-bold text-dark">${escapeHtml(ts.ho_ten)}</div>
+            <div class="text-muted small mb-2">
+                <i class="fas fa-id-card me-1"></i>${escapeHtml(ts.ma_so_sv) || '—'}
+                ${ts.lop ? '· ' + escapeHtml(ts.lop) : ''}
+                <span class="ms-1"><i class="fas fa-clock me-1"></i>${escapeHtml(ts.gio_vao)}</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-success btn-sm flex-grow-1 fw-bold" onclick="duyet(${ts.id}, 'duyet')">
+                    <i class="fas fa-check me-1"></i>Duyệt
+                </button>
+                <button class="btn btn-outline-danger btn-sm flex-grow-1 fw-bold" onclick="duyet(${ts.id}, 'tu_choi')">
+                    <i class="fas fa-xmark me-1"></i>Từ chối
+                </button>
+            </div>
+        </div>
+    </div>`;
+}
+
+async function duyet(tsId, action) {
+    const card = document.getElementById('cd-' + tsId);
+    if (card) card.style.opacity = '0.5';
+    try {
+        const res = await fetch(`/duyet_ajax/${tsId}/${action}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            if (card) card.remove();
+            taiChoDuyet();
+            // Cập nhật lại bảng thí sinh (trạng thái mới) sau 1 giây
+            setTimeout(function() { location.reload(); }, 800);
+        } else if (card) {
+            card.style.opacity = '1';
+        }
+    } catch (e) {
+        if (card) card.style.opacity = '1';
+    }
+}
+
+// ----- Khối chờ duyệt: thu gọn thành banner mỏng khi trống, mở rộng khi có người -----
+var cdCard   = document.getElementById('choDuyetCard');
+var cdBar    = document.getElementById('cdBar');
+var cdBody   = document.getElementById('cdBody');
+var cdToggle = document.getElementById('cdToggle');
+var soChoTruoc = 0;
+
+function moChoDuyet(open) {
+    cdCard.classList.toggle('open', open);
+    cdBody.style.display = open ? '' : 'none';
+}
+function capNhatChoDuyetUI(count) {
+    document.getElementById('choDuyetBadge').textContent = count;
+    if (count > 0) {
+        cdCard.classList.add('has-pending');
+        cdToggle.style.display = '';
+        if (soChoTruoc === 0) moChoDuyet(true);   // vừa có người -> tự mở
+    } else {
+        cdCard.classList.remove('has-pending');
+        cdToggle.style.display = 'none';
+        moChoDuyet(false);                          // không có ai -> thu gọn banner mỏng
+    }
+    soChoTruoc = count;
+}
+// Bấm vào thanh banner để mở / thu gọn (chỉ khi đang có người chờ)
+if (cdBar) {
+    cdBar.addEventListener('click', function() {
+        if (!cdCard.classList.contains('has-pending')) return;
+        moChoDuyet(!cdCard.classList.contains('open'));
+    });
+}
+
+async function taiChoDuyet() {
+    try {
+        const res = await fetch(`/quan_ly_phong/${PHONG_ID}/cho_duyet_data`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.ok) return;
+        const list = data.cho_duyet || [];
+        const cont = document.getElementById('choDuyetList');
+        const empty = document.getElementById('choDuyetEmpty');
+
+        if (list.length === 0) {
+            cont.innerHTML = '';
+            cont.appendChild(empty);
+            empty.style.display = 'block';
+        } else {
+            empty.style.display = 'none';
+            cont.innerHTML = list.map(theChoDuyet).join('');
+        }
+        capNhatChoDuyetUI(list.length);
+    } catch (e) {}
+}
+
+if (!PHONG_DONG) {
+    taiChoDuyet();
+    var __cdTimer = setInterval(taiChoDuyet, 4000);
+    window.__roomCleanup = function () { clearInterval(__cdTimer); };
+} else {
+    window.__roomCleanup = null;
+}
+</script>
+</div><!-- /roomHost -->
+{% endblock %}
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/room-nav.js') }}"></script>
+{% endblock %}

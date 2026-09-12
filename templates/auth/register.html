@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Đăng ký - Khoa TT-TT</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/controls.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/square.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/flash.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ui-enhance.css') }}">
+    
+    <style>
+        /* Tinh chỉnh riêng cho thẻ Select (light theme) */
+        .input-group-custom select {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #0f172a;
+            padding-left: 10px;
+            outline: none;
+            cursor: pointer;
+            appearance: none; /* Ẩn mũi tên mặc định để trông gọn hơn */
+        }
+        .input-group-custom select option {
+            background-color: #ffffff;
+            color: #0f172a;
+        }
+        /* Gợi ý tên đăng nhập */
+        .reg-hint { display:block; margin-top:6px; font-size:.76rem; color:#94a3b8; line-height:1.35; }
+        /* Bảng yêu cầu mật khẩu — tick xanh khi đạt */
+        .pw-reqs { list-style:none; margin:8px 0 0; padding:0;
+                   display:grid; grid-template-columns:1fr 1fr; gap:3px 14px; }
+        .pw-reqs li { font-size:.78rem; color:#94a3b8; display:flex; align-items:center;
+                      gap:6px; transition:color .2s; }
+        .pw-reqs li i { font-size:.72rem; color:#cbd5e1; transition:color .2s; }
+        .pw-reqs li.ok { color:#16a34a; }
+        .pw-reqs li.ok i { color:#16a34a; }
+        .pw-reqs.show-warn li:not(.ok) { color:#dc2626; }
+        .pw-reqs.show-warn li:not(.ok) i { color:#dc2626; }
+    </style>
+</head>
+<body class="auth-page">
+
+<div class="auth-container">
+    <div class="auth-card register-card">
+        <div class="auth-header">
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+            <div data-flash="{{ category }}" data-flash-message="{{ message }}" hidden></div>
+            {% endfor %}
+        {% endwith %}
+
+        <form action="/register" method="POST" class="auth-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label>Email <span class="text-danger">*</span></label>
+                <div class="input-group-custom">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" name="email" placeholder="email@truong.edu.vn" value="{{ request.form.get('email', '') }}" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Tên đăng nhập <span class="text-danger">*</span></label>
+                <div class="input-group-custom">
+                    <i class="fas fa-at"></i>
+                    <input type="text" name="username" placeholder="Tên đăng nhập" value="{{ request.form.get('username', '') }}"
+                           pattern="[A-Za-z0-9_]{4,30}" minlength="4" maxlength="30"
+                           title="4–30 ký tự, chỉ gồm chữ cái, số và dấu gạch dưới (_)" required>
+                </div>
+                <small class="reg-hint">4–30 ký tự, chỉ chữ cái, số và dấu gạch dưới (_) — không dấu, không khoảng trắng.</small>
+            </div>
+
+            <div class="form-group">
+                <label>Mật khẩu <span class="text-danger">*</span></label>
+                <div class="input-group-custom">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" name="password" id="regPasswordInput" placeholder="Mật khẩu" minlength="8" required>
+                </div>
+                <ul class="pw-reqs" id="pwReqs">
+                    <li data-rule="len"><i class="fas fa-circle-xmark"></i> Ít nhất 8 ký tự</li>
+                    <li data-rule="upper"><i class="fas fa-circle-xmark"></i> 1 chữ IN HOA</li>
+                    <li data-rule="lower"><i class="fas fa-circle-xmark"></i> 1 chữ thường</li>
+                    <li data-rule="digit"><i class="fas fa-circle-xmark"></i> 1 chữ số</li>
+                    <li data-rule="special"><i class="fas fa-circle-xmark"></i> 1 ký tự đặc biệt (!@#$…)</li>
+                </ul>
+            </div>
+
+            <div class="form-group mt-3">
+                <label>Vai trò của bạn <span class="text-danger">*</span></label>
+                <div class="input-group-custom">
+                    <i class="fas fa-user-graduate"></i>
+                    <select name="role" id="roleSelect" required>
+                        <option value="hoc_sinh" {% if request.form.get('role') != 'giao_vien' %}selected{% endif %}>Học sinh / Sinh viên</option>
+                        <option value="giao_vien" {% if request.form.get('role') == 'giao_vien' %}selected{% endif %}>Giảng viên</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Chỉ hiện khi chọn vai trò Giáo viên -->
+            <div class="form-group mt-3 mb-4" id="maGiaoVienGroup" style="display: none;">
+                <label>Mã mời giáo viên <span class="text-danger">*</span></label>
+                <div class="input-group-custom">
+                    <i class="fas fa-key"></i>
+                    <input type="text" name="ma_giao_vien" id="maGiaoVienInput" placeholder="Nhập mã do quản trị viên cấp" value="{{ request.form.get('ma_giao_vien', '') }}">
+                </div>
+                <small class="text-muted">Chỉ giáo viên có mã mời mới đăng ký được vai trò này.</small>
+            </div>
+
+            <button type="submit" class="btn-auth primary w-100">
+                <i class="fas fa-user-plus me-2"></i>Đăng kí
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            Đã có tài khoản? <a href="/login">Đăng nhập</a>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+<script>
+    // Hiện ô "Mã mời giáo viên" chỉ khi chọn vai trò Giáo viên
+    (function () {
+        var sel   = document.getElementById('roleSelect');
+        var group = document.getElementById('maGiaoVienGroup');
+        var input = document.getElementById('maGiaoVienInput');
+        function toggle() {
+            var laGV = sel.value === 'giao_vien';
+            group.style.display = laGV ? 'block' : 'none';
+            input.required = laGV;
+            if (!laGV) input.value = '';
+        }
+        sel.addEventListener('change', toggle);
+        toggle();
+    })();
+
+    // ===== Kiểm tra mật khẩu MẠNH ngay khi gõ (khớp đúng luật phía server) =====
+    (function () {
+        var pw   = document.getElementById('regPasswordInput');
+        var reqs = document.getElementById('pwReqs');
+        if (!pw || !reqs) return;
+        var rules = {
+            len:     function (v) { return v.length >= 8; },
+            upper:   function (v) { return /[A-Z]/.test(v); },
+            lower:   function (v) { return /[a-z]/.test(v); },
+            digit:   function (v) { return /\d/.test(v); },
+            special: function (v) { return /[^A-Za-z0-9\s]/.test(v); }
+        };
+        function datHet(v) {
+            return rules.len(v) && rules.upper(v) && rules.lower(v)
+                && rules.digit(v) && rules.special(v);
+        }
+        function capNhat() {
+            var v = pw.value;
+            reqs.querySelectorAll('li').forEach(function (li) {
+                var ok = rules[li.getAttribute('data-rule')](v);
+                li.classList.toggle('ok', ok);
+                var ic = li.querySelector('i');
+                if (ic) ic.className = 'fas ' + (ok ? 'fa-circle-check' : 'fa-circle-xmark');
+            });
+        }
+        pw.addEventListener('input', capNhat);
+        capNhat();
+        // Chặn gửi nếu mật khẩu chưa đạt (server vẫn kiểm lại lần nữa)
+        var form = pw.closest('form');
+        if (form) form.addEventListener('submit', function (e) {
+            if (!datHet(pw.value)) {
+                e.preventDefault();
+                capNhat();
+                reqs.classList.add('show-warn');
+                pw.focus();
+            }
+        });
+    })();
+</script>
+<script src="{{ url_for('static', filename='js/flash.js') }}"></script>
+<script src="{{ url_for('static', filename='js/form-validate.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ui-enhance.js') }}"></script>
+{% include 'components/footer_auth.html' %}
+</body>
+</html>

@@ -1,0 +1,94 @@
+/* =====================================================================
+   square.css — Bo viền VUÔNG toàn bộ giao diện
+   Mục tiêu: tạo phong cách sắc cạnh, khác biệt với kiểu bo tròn mềm mại
+   thường thấy ở các giao diện chat AI.
+   Nạp SAU CÙNG để ghi đè mọi border-radius khác (kể cả Bootstrap).
+   ===================================================================== */
+
+*,
+*::before,
+*::after {
+    border-radius: 0 !important;
+}
+
+/* Ngoại lệ 1: TẤT CẢ NÚT bo góc nhẹ 8px (giống nút "Lọc theo chương"). */
+button,
+.btn,
+[class*="btn"] {
+    border-radius: 8px !important;
+}
+
+/* Ngoại lệ 2: ẢNH ĐẠI DIỆN + nút icon TRÒN nhỏ luôn giữ khung TRÒN. */
+.pf-avatar,
+.pf-avatar-img,
+.pf-avatar-cam,
+.nav-avatar,
+.nav-avatar-default,
+.ai-credit-q,
+.pdf-hint-btn,
+.mega-bubble {
+    border-radius: 50% !important;
+}
+
+/* Ngoại lệ 3: Ô nhập bo góc nhẹ cho trang Đăng nhập/Đăng ký */
+.login-card .input-group-custom,
+.register-card .input-group-custom {
+    border-radius: 10px !important;
+}
+.login-card .input-group-custom input,
+.register-card .input-group-custom input {
+    border-radius: 10px !important;
+}
+
+/* Ngoại lệ 4: Tab pills — tắt mọi hiệu ứng nền/ring/ô vuông thừa khi hover/focus */
+.custom-pills,
+.custom-pills *,
+.custom-pills *::before,
+.custom-pills *::after {
+    border-radius: 10px !important;
+}
+/* Tuyệt đối không để lộ background hay ring vuông nào */
+.custom-pills .nav-link,
+.custom-pills .nav-link:hover,
+.custom-pills .nav-link:focus,
+.custom-pills .nav-link:focus-visible,
+.custom-pills .nav-link:active,
+.custom-pills .nav-link.active {
+    outline: none !important;
+    box-shadow: none !important;
+    background-clip: border-box !important;
+    -webkit-background-clip: border-box !important;
+}
+/* Xóa pseudo-element ::after của Bootstrap focus ring */
+.custom-pills .nav-link::after,
+.custom-pills .nav-link:hover::after,
+.custom-pills .nav-link:focus::after,
+.custom-pills .nav-link:focus-visible::after,
+.custom-pills .nav-link:active::after,
+.custom-pills .nav-link.active::after {
+    display: none !important;
+    content: none !important;
+    opacity: 0 !important;
+    background: transparent !important;
+}
+/* Tương tự cho lib-subtab-btn bên Thư viện */
+.lib-subtab-btn,
+.lib-subtab-btn:hover,
+.lib-subtab-btn:focus,
+.lib-subtab-btn:focus-visible,
+.lib-subtab-btn:active,
+.lib-subtab-btn.active {
+    outline: none !important;
+    box-shadow: none !important;
+}
+.lib-subtab-btn::after,
+.lib-subtab-btn:hover::after,
+.lib-subtab-btn:focus::after,
+.lib-subtab-btn:focus-visible::after,
+.lib-subtab-btn:active::after,
+.lib-subtab-btn.active::after {
+    display: none !important;
+    content: none !important;
+    opacity: 0 !important;
+    background: transparent !important;
+}

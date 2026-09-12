@@ -1,0 +1,1411 @@
+{#
+  tao_de_thi.html — WIZARD TẠO ĐỀ THI (file template lớn nhất dự án).
+
+  Bốn bước, tất cả nằm trong MỘT trang, chuyển bước bằng JavaScript, không tải
+  lại trang:
+
+    Bước 1 — Thông tin đề (môn, học kỳ, hình thức thi).
+    Bước 2 — Chọn nguồn câu hỏi rồi nhặt câu (bấm tay hoặc bốc ngẫu nhiên).
+    Bước 3 — Tùy chọn: tổng điểm, thời lượng, số mã đề, có trộn hay không.
+    Bước 4 — Xem trước bản in, rồi bấm lưu.
+
+  ĐIỀU DỄ SAI NHẤT: các mã đề (A01, A02...) được TRỘN NGAY TẠI TRÌNH DUYỆT ở
+  bước 4, rồi gửi nguyên si lên server qua trường ẩn `variants_json`. Server lưu
+  đúng những bản đó chứ KHÔNG trộn lại. Nhờ vậy đề giáo viên xem ở bước 4 chính
+  là đề được lưu, được in, và thí sinh làm — không sai một chữ.
+
+  CSS bản in ở đây phải khớp với _DE_PRINT_CSS trong routes/exam.py. Hai nơi
+  cùng in ra một mẫu đề; sửa một bên mà quên bên kia thì bản xem trước và file
+  tải về sẽ trông khác nhau.
+#}
+{% extends 'base.html' %}
+
+{% block title %}Tạo đề thi - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tdt-wrap { max-width: min(1680px, 97vw); margin: 0 auto;
+        animation: tabSwitch 0.32s cubic-bezier(0.16,1,0.3,1);
+        /* Đậm màu chữ THƯỜNG cả trang lên 1 tí (vẫn là xám), trừ đề mục dùng
+           --text-primary nên không đổi. */
+        --text-secondary: #2e3c52;
+        --text-muted: #56657a; }
+
+    /* Bước 1 + 2 nằm CHUNG 1 trang, xếp NGANG cho full màn.
+       Bước 1 (nguồn+bộ) cột trái rộng để chữ không bị chèn; Bước 2 cột phải co giãn. */
+    .tdt-stage12 { display: flex; gap: 18px; align-items: flex-start; }
+    .tdt-stage12 > .tdt-panel { margin-bottom: 14px; }
+    .tdt-stage12 > [data-panel="1"] { flex: 0 0 clamp(500px, 40%, 640px); }
+    .tdt-stage12 > [data-panel="2"] { flex: 1 1 auto; min-width: 0; }
+    .struct-hint { color: var(--text-muted); font-size: 0.84rem; margin: 4px 0 0; }
+    /* Khi chưa chọn bộ: làm mờ + khóa thao tác phần thân Bước 2 (giữ tiêu đề+gợi ý). */
+    .tdt-panel.struct-locked > *:not(.tdt-head) {
+        opacity: 0.4; pointer-events: none; user-select: none; }
+
+    /* Đồng nhất font + cỡ chữ cho Bước 1 & 2, KHÔNG in đậm.
+       (Trừ tiêu đề bước "Nguồn câu hỏi"/"Cấu trúc đề" trong .tdt-head.) */
+    .tdt-stage12 .tdt-panel label,
+    .tdt-stage12 .tdt-panel h4,
+    .tdt-stage12 .tdt-panel p,
+    .tdt-stage12 .tdt-panel strong,
+    .tdt-stage12 .tdt-panel button,
+    .tdt-stage12 .tdt-panel select,
+    .tdt-stage12 .tdt-panel input,
+    .tdt-stage12 .tdt-panel span,
+    .tdt-stage12 .tdt-panel th,
+    .tdt-stage12 .tdt-panel td {
+        font-family: inherit !important;
+        font-size: 0.88rem !important;
+        font-weight: 400 !important;
+    }
+    /* Giữ nguyên tiêu đề bước (đề mục) */
+    .tdt-stage12 .tdt-head h3 { font-size: 1.05rem !important; font-weight: 800 !important; }
+    .tdt-stage12 .tdt-head .badge-step { font-size: 0.78rem !important; font-weight: 700 !important; }
+
+    /* Bước 3 & 4: đồng nhất font + cỡ chữ, không in đậm.
+       (Trừ đề mục .tdt-head; ở Bước 4 KHÔNG đụng phần xem trước đề #paper.) */
+    .tdt-panel[data-panel="3"] label,
+    .tdt-panel[data-panel="3"] p,
+    .tdt-panel[data-panel="3"] input,
+    .tdt-panel[data-panel="3"] select,
+    .tdt-panel[data-panel="3"] button,
+    .tdt-panel[data-panel="3"] span,
+    .tdt-panel[data-panel="3"] strong,
+    .tdt-panel[data-panel="4"] > .tdt-head p,
+    .tdt-panel[data-panel="4"] > .tdt-nav button,
+    .tdt-panel[data-panel="4"] .paper-tabs button {
+        font-family: inherit !important;
+        font-size: 0.88rem !important;
+        font-weight: 400 !important;
+    }
+    .tdt-panel[data-panel="3"] .tdt-head h3,
+    .tdt-panel[data-panel="4"] .tdt-head h3 { font-size: 1.05rem !important; font-weight: 800 !important; }
+    .tdt-panel[data-panel="3"] .tdt-head .badge-step,
+    .tdt-panel[data-panel="4"] .tdt-head .badge-step { font-size: 0.78rem !important; font-weight: 700 !important; }
+    /* ===== Bước 3 + 4 gộp 1 trang, xếp NGANG full màn (giống bước 1+2) ===== */
+    .tdt-stage34 { display: flex; gap: 18px; align-items: flex-start; }
+    .tdt-stage34 > .tdt-panel { margin-bottom: 14px; }
+    .tdt-stage34 > [data-panel="3"] { flex: 0 0 clamp(480px, 38%, 640px); }
+    .tdt-stage34 > [data-panel="4"] { flex: 1 1 auto; min-width: 0; }
+    /* Form thông tin nằm cột hẹp -> lưới 4 cột rút còn 2 cột cho dễ đọc */
+    .tdt-stage34 > [data-panel="3"] .tdt-grid4 { grid-template-columns: 1fr 1fr; }
+    @media (max-width: 1000px){
+        .tdt-stage12, .tdt-stage34 { flex-direction: column; }
+        .tdt-stage12 > [data-panel="1"],
+        .tdt-stage34 > [data-panel="3"] { flex-basis: auto; }
+    }
+
+    /* ===== Khung nội dung từng bước ===== */
+    .tdt-card {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 18px 20px; margin-bottom: 14px;
+        box-shadow: var(--shadow-sm);
+    }
+    .tdt-panel { display: none; animation: tabSwitch 0.3s var(--ease); }
+    .tdt-panel.active { display: block; }
+    .tdt-head { margin-bottom: 14px; }
+    .tdt-head h3 { font-size: 1.05rem; font-weight: 800; color: var(--text-primary);
+        margin: 0 0 2px; display: flex; align-items: center; gap: 9px; }
+    .tdt-head h3 .badge-step {
+        width: 24px; height: 24px; border-radius: 7px; background: var(--grad-primary);
+        color: #fff; font-size: 0.78rem; display: inline-flex; align-items: center;
+        justify-content: center; flex-shrink: 0;
+    }
+    .tdt-head p { color: var(--text-muted); font-size: 0.84rem; margin: 4px 0 0; }
+
+    .tdt-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+    .tdt-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 12px; }
+    .tdt-field { margin-bottom: 0; }
+    .tdt-field label { display: block; font-weight: 700; color: var(--text-secondary);
+        font-size: 0.83rem; margin-bottom: 5px; }
+    .tdt-field .req { color: #dc2626; }
+    .tdt-field .hint { font-size: 0.72rem; color: var(--text-muted); margin: 4px 0 0; }
+    .tdt-card .form-control-dark { padding: 7px 10px; font-size: 0.88rem; }
+    .inp-sm { max-width: 180px; }
+    .inp-xs { max-width: 120px; }
+    .inp-ro { background: var(--surface-2); font-weight: 700; color: var(--text-secondary); }
+
+    /* Dropdown chọn BỘ câu hỏi (tùy biến để căn thời gian sát phải) */
+    .bo-dd { position: relative; }
+    .bo-dd-toggle {
+        width: 100%; display: flex; align-items: center; gap: 10px;
+        cursor: pointer; text-align: left; background: var(--surface);
+    }
+    .bo-dd-toggle .bo-left { flex: 1 1 auto; min-width: 0; overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap; }
+    .bo-dd-toggle .bo-time { flex: 0 0 auto; color: var(--text-muted); font-size: 0.8rem; }
+    .bo-dd-toggle .bo-caret { flex: 0 0 auto; color: var(--text-muted);
+        font-size: 0.72rem; transition: transform 0.2s var(--ease); }
+    .bo-dd.open .bo-caret { transform: rotate(180deg); }
+    .bo-dd-panel {
+        display: none; position: absolute; z-index: 40; left: 0; right: 0;
+        top: calc(100% + 4px); background: var(--surface);
+        border: 1px solid var(--border); border-radius: 10px;
+        box-shadow: var(--shadow-lg); max-height: 280px; overflow-y: auto; padding: 4px;
+    }
+    .bo-dd.open .bo-dd-panel { display: block; }
+    .bo-dd-item {
+        display: flex; align-items: center; gap: 14px; padding: 8px 10px;
+        border-radius: 7px; cursor: pointer; font-size: 0.86rem;
+    }
+    .bo-dd-item:hover, .bo-dd-item.sel { background: var(--primary-softer); }
+    .bo-dd-item .bo-left { flex: 1 1 auto; min-width: 0; overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap;
+        color: var(--text-primary); font-weight: 600; }
+    .bo-dd-item .bo-left small { font-weight: 500; color: var(--text-muted); }
+    .bo-dd-item .bo-time { flex: 0 0 auto; color: var(--text-muted);
+        font-size: 0.78rem; white-space: nowrap; }
+    .bo-dd-empty { padding: 10px; text-align: center;
+        color: var(--text-muted); font-size: 0.85rem; }
+
+    /* Thẻ chọn nguồn */
+    .src-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .src-opt {
+        border: 2px solid var(--border); border-radius: 12px; padding: 9px 14px;
+        cursor: pointer; transition: all 0.2s var(--ease); background: var(--surface-2);
+        display: flex; align-items: center; gap: 10px;
+    }
+    .src-opt:hover { border-color: rgba(37,99,235,0.4); transform: translateY(-2px); }
+    .src-opt.active { border-color: var(--primary); background: var(--primary-softer);
+        box-shadow: var(--shadow-sm); }
+    .src-opt i { font-size: 1.1rem; color: var(--primary); margin: 0; flex: 0 0 auto; }
+    .src-opt h4 { font-size: 0.92rem; font-weight: 800; color: var(--text-primary); margin: 0;
+        white-space: nowrap; }
+    .src-opt p { font-size: 0.78rem; color: var(--text-muted); margin: 0; }
+    .src-opt .src-count { display:inline-block; margin: 0 0 0 auto; padding: 2px 10px;
+        border-radius: 20px; background: var(--primary-soft); color: var(--primary-dark);
+        font-weight: 700; font-size: 0.74rem; }
+
+    /* ===== Ma trận đề ===== */
+    .mt-table { width: 100%; border-collapse: separate; border-spacing: 0;
+        border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .mt-table th, .mt-table td { padding: 8px 10px; text-align: center; font-size: 0.86rem; }
+    .mt-table thead th { background: var(--surface-2); color: var(--text-secondary);
+        font-weight: 800; border-bottom: 1px solid var(--border); }
+    .mt-table tbody td { border-bottom: 1px solid var(--border); }
+    .mt-table tbody tr:last-child td { border-bottom: none; }
+    .mt-table td.chuong-cell { text-align: left; font-weight: 700; color: var(--text-primary); }
+    .mt-table .mt-cellbox { display: inline-flex; align-items: center; gap: 5px; }
+    .mt-table .avail { font-size: 0.74rem; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+    .mt-input { width: 54px; box-sizing: border-box; text-align: center; padding: 6px 6px; border-radius: 8px;
+        border: 1px solid var(--border-strong); background: var(--surface);
+        font-weight: 700; color: var(--text-primary);
+        -moz-appearance: textfield; appearance: textfield; }
+    .mt-input::-webkit-outer-spin-button,
+    .mt-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .mt-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+    .mt-foot td { background: var(--primary-softer); font-weight: 800; color: var(--primary-dark); }
+
+    .chip-de  { color: #16a34a; } .chip-tb { color: #d97706; } .chip-kho { color: #dc2626; }
+    /* Nhãn % và tiêu đề cột Dễ/Trung bình/Khó luôn hiện ĐÚNG màu (xanh lá/cam/đỏ). */
+    .tdt-wrap .chip-de  { color: #16a34a !important; }
+    .tdt-wrap .chip-tb  { color: #d97706 !important; }
+    .tdt-wrap .chip-kho { color: #dc2626 !important; }
+
+    /* ===== Chọn thủ công ===== */
+    .q-list { max-height: 360px; overflow-y: auto; border: 1px solid var(--border);
+        border-radius: 12px; padding: 6px; background: var(--surface-2); }
+    .q-item { display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px;
+        background: var(--surface); border: 1px solid var(--border); margin-bottom: 6px; cursor: pointer; }
+    .q-item:hover { border-color: rgba(37,99,235,0.35); }
+    .q-item input { margin-top: 3px; }
+    .q-item .q-noidung { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; }
+    .q-item .q-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 3px; }
+    .q-badge { padding: 1px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; }
+    .q-de  { background: rgba(22,163,74,0.12); color: #16a34a; }
+    .q-tb  { background: rgba(217,119,6,0.12); color: #d97706; }
+    .q-kho { background: rgba(220,38,38,0.12); color: #dc2626; }
+
+    /* tab phụ chọn cách lấy câu */
+    /* Tab "Theo ma trận / Chọn thủ công" DÍNH LIỀN khung form bên dưới, KHÔNG nền xanh. */
+    .subtab { display: flex; width: max-content; margin: 0 0 -1px; position: relative; z-index: 2;
+        border: 1px solid var(--border-strong); border-bottom: none;
+        border-radius: 10px 10px 0 0; overflow: hidden; }
+    .subtab button { padding: 8px 18px; border: none; background: var(--surface-2);
+        font-size: 0.86rem; color: var(--text-secondary); cursor: pointer; }
+    .subtab button + button { border-left: 1px solid var(--border-strong); }
+    .subtab button.active { background: var(--primary-softer); color: var(--primary-dark); font-weight: 600; }
+    .subtab-body { border: 1px solid var(--border-strong); border-radius: 0 10px 10px 10px;
+        padding: 16px; background: var(--primary-softer); margin-bottom: 4px; }
+
+    /* ===== Danh sách câu đã chọn (đổi câu) ===== */
+    .pick-item { display:flex; gap:12px; align-items:flex-start; padding: 12px 14px;
+        border:1px solid var(--border); border-radius: 12px; background: var(--surface);
+        margin-bottom: 10px; }
+    .pick-item .idx { width:28px; height:28px; flex-shrink:0; border-radius:8px;
+        background: var(--primary-soft); color: var(--primary-dark); font-weight:800;
+        display:flex; align-items:center; justify-content:center; font-size:0.82rem; }
+    .pick-item .body { flex:1; min-width:0; }
+    .pick-item .qn { font-weight:700; color: var(--text-primary); font-size:0.92rem; }
+    .pick-item .meta { font-size:0.74rem; color:var(--text-muted); margin-top:4px; }
+    .pick-item .acts { display:flex; gap:6px; flex-shrink:0; }
+    .icon-btn { width:32px; height:32px; border-radius:8px; border:1px solid var(--border);
+        background:var(--surface); color:var(--text-muted); cursor:pointer;
+        display:flex; align-items:center; justify-content:center; transition:all .18s var(--ease); }
+    .icon-btn:hover { border-color: var(--primary); color: var(--primary-dark); }
+    .icon-btn.del:hover { border-color:#dc2626; color:#dc2626; }
+
+    /* ===== Chọn mã đề để xem trước ===== */
+    .paper-tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+    .paper-tabs button { padding:6px 14px; border:1px solid var(--border-strong);
+        border-radius:8px; background:var(--surface); color:var(--text-secondary);
+        font-weight:700; font-size:0.84rem; cursor:pointer; transition:all .18s var(--ease); }
+    .paper-tabs button:hover { border-color:var(--primary); color:var(--primary-dark); }
+    .paper-tabs button.active { background:var(--grad-primary); color:#fff; border-color:transparent;
+        box-shadow:var(--shadow-primary); }
+
+    /* ===== Xem trước dạng ĐỀ THI ONLINE (giống trang Xem đề) ===== */
+    .ol-head { background: linear-gradient(135deg, rgba(102,126,234,0.14), rgba(240,147,251,0.07));
+        border:1px solid rgba(102,126,234,0.22); border-radius:16px; padding:18px 22px; margin-bottom:16px; }
+    .ol-title { font-size:1.2rem; font-weight:800; color:var(--text-primary); margin-bottom:8px; }
+    .ol-meta { display:flex; gap:10px; flex-wrap:wrap; }
+    .ol-badge { background:#f1f5f9; border:1px solid #e2e8f0; color:#334155;
+        padding:4px 11px; border-radius:8px; font-size:0.8rem; font-weight:600; }
+    .ol-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px;
+        padding:16px 18px; margin-bottom:12px; }
+    .ol-card-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .ol-qnum { font-size:0.72rem; font-weight:800; color:var(--primary-dark);
+        text-transform:uppercase; letter-spacing:1px; }
+    .ol-chip { padding:1px 9px; border-radius:6px; font-size:0.7rem; font-weight:700; }
+    .ol-chip-ch { background:rgba(102,126,234,0.14); color:#2563eb; border:1px solid rgba(102,126,234,0.28); }
+    .ol-q { font-size:1rem; font-weight:600; color:var(--text-primary); line-height:1.6; margin-bottom:14px; }
+    .ol-opts { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .ol-opt { display:flex; align-items:center; gap:10px; padding:9px 13px;
+        border:1px solid #e2e8f0; border-radius:10px; background:#fff; }
+    .ol-opt.correct { background:rgba(56,239,125,0.08); border-color:rgba(56,239,125,0.35); }
+    .ol-let { width:26px; height:26px; flex-shrink:0; border-radius:8px; background:#e2e8f0;
+        color:#64748b; font-weight:700; font-size:0.78rem; display:flex; align-items:center; justify-content:center; }
+    .ol-opt.correct .ol-let { background:rgba(56,239,125,0.22); color:#16a34a; }
+    .ol-txt { font-size:0.9rem; color:#475569; }
+    .ol-opt.correct .ol-txt { color:#16a34a; font-weight:600; }
+    .ol-mark { margin-left:auto; color:#16a34a; font-size:0.74rem; font-weight:700; white-space:nowrap; }
+    @media (max-width: 640px){ .ol-opts { grid-template-columns:1fr; } }
+
+    /* ===== nút điều hướng ===== */
+    .tdt-nav { display:flex; justify-content: space-between; align-items:center;
+        gap: 10px; margin-top: 4px; }
+    .btn-tdt {
+        background: var(--grad-primary); color: #fff; font-weight: 800; border: none;
+        padding: 10px 20px; border-radius: 10px; font-size: 0.9rem; cursor: pointer;
+        box-shadow: var(--shadow-primary); transition: all 0.2s var(--ease);
+        display:inline-flex; align-items:center; gap:7px;
+    }
+    .btn-tdt:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); color: #fff; }
+    .btn-tdt:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow:none; }
+    .btn-back {
+        background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border-strong);
+        padding: 9px 16px; border-radius: 10px; font-weight: 700; font-size: 0.88rem; cursor: pointer;
+        transition: all 0.2s var(--ease); display:inline-flex; align-items:center; gap:7px;
+    }
+    .btn-back:hover { border-color: var(--primary); color: var(--primary-dark); }
+
+    .switch-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+    .form-check-input { width: 2.4em; height: 1.3em; cursor: pointer; }
+
+    /* ===== Ô TICK (checkbox) THỐNG NHẤT: hộp vuông, dấu V trắng khi chọn ===== */
+    .tdt-check {
+        -webkit-appearance: none; appearance: none;
+        width: 20px; height: 20px; flex-shrink: 0; cursor: pointer; margin: 0;
+        border: 2px solid var(--border-strong); border-radius: 6px;
+        background: var(--surface); position: relative; transition: all .15s ease;
+        vertical-align: middle;
+    }
+    .tdt-check:hover { border-color: var(--primary); }
+    .tdt-check:checked { background: var(--primary); border-color: var(--primary); }
+    .tdt-check:checked::after {
+        content: ''; position: absolute; left: 6px; top: 2px;
+        width: 5px; height: 10px; border: solid #fff; border-width: 0 2.5px 2.5px 0;
+        transform: rotate(45deg);
+    }
+    .tdt-check:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.18); }
+
+    /* Ô nhập số gọn vuông (số lượng đề, số câu mong muốn) */
+    .num-box { width: 64px; box-sizing: border-box; text-align: center; padding: 8px 8px; border-radius: 8px;
+        border: 1px solid var(--border-strong); background: var(--surface);
+        font-weight: 700; color: var(--text-primary);
+        -moz-appearance: textfield; appearance: textfield; }
+    /* Ẩn nút tăng/giảm để không che mất chữ số bên phải (gây hiển thị "3C" thay vì "30") */
+    .num-box::-webkit-outer-spin-button,
+    .num-box::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .num-box:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+
+    /* Cảnh báo khi nguồn không đủ câu cho "Tự điền" */
+    .auto-warn { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px;
+        background: rgba(217,119,6,0.1); border: 1px solid rgba(217,119,6,0.35);
+        color: #b45309; border-radius: 10px; padding: 9px 14px;
+        font-size: 0.85rem; font-weight: 600; line-height: 1.45; }
+    /* Icon giữ nguyên góc trên-trái; phần chữ gói trong 1 <span> chảy thành đoạn văn
+       (không để text & <strong> tách thành các cột flex -> vỡ cấu trúc, xuống dòng lộn xộn). */
+    .auto-warn > i { flex-shrink: 0; margin-top: 2px; }
+    .auto-warn > span { flex: 1 1 auto; min-width: 0; }
+    .hidden { display: none !important; }
+    .badge-count { background: var(--primary-soft); color: var(--primary-dark);
+        padding: 3px 12px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; }
+
+    @media (max-width: 640px){
+        .tdt-grid2, .tdt-grid4, .src-grid { grid-template-columns: 1fr; }
+        .tdt-card { padding: 18px; }
+        .inp-sm, .inp-xs { max-width: none; }
+
+        /* ===== Ma trận đề trên ĐIỆN THOẠI: thu gọn cột để "Chương 1/2/3"
+           KHÔNG bị dồn/xuống hàng; ô nhập nhỏ lại cho vừa bề ngang màn hình.
+           Nếu vẫn quá hẹp thì bảng tự cuộn ngang (wrapper overflow-x:auto). ===== */
+        .mt-table { width: 100%; }
+        .mt-table th, .mt-table td { padding: 7px 4px; font-size: 0.8rem; }
+        /* Tên chương LUÔN nằm trên 1 dòng */
+        .mt-table td.chuong-cell {
+            white-space: nowrap; font-size: 0.82rem; padding-left: 8px; padding-right: 6px;
+        }
+        .mt-table thead th { font-size: 0.72rem; line-height: 1.15; }  /* "Trung bình" được phép xuống 2 dòng ở tiêu đề */
+        .mt-input { width: 40px; padding: 5px 2px; }
+        .mt-table .mt-cellbox { gap: 2px; }
+        .mt-table .avail { font-size: 0.66rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tdt-wrap">
+    <form method="POST" action="{{ url_for('exam.tao_de_thi_post') }}" id="tdtForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="nguon" id="fNguon" value="ca_nhan">
+        <input type="hidden" name="che_do" value="thu_cong">
+        <input type="hidden" name="variants_json" id="fVariants">
+        <div id="selectedInputs"></div>
+
+        <!-- ===== KHỐI GỘP BƯỚC 1 + BƯỚC 2 (cùng 1 trang, xếp ngang full màn) ===== -->
+        <div class="tdt-stage12">
+
+        <!-- ============ BƯỚC 1: NGUỒN CÂU HỎI ============ -->
+        <div class="tdt-card tdt-panel active" data-panel="1">
+            <div class="tdt-head">
+                <h3><span class="badge-step">1</span> Nguồn câu hỏi</h3>
+            </div>
+            <div class="src-grid mb-3">
+                <div class="src-opt active" data-nguon="ca_nhan">
+                    <i class="fas fa-folder-open"></i>
+                    <h4>Câu hỏi của tôi</h4>
+                </div>
+                <div class="src-opt" data-nguon="chung">
+                    <i class="fas fa-book-open"></i>
+                    <h4>Ngân hàng câu hỏi</h4>
+                </div>
+            </div>
+            <div class="tdt-field">
+                <label>Bộ câu hỏi <span class="req">*</span></label>
+                <!-- select gốc giữ ẩn: vẫn là nơi submit (name=bo_id) & nguồn dữ liệu
+                     cho JS cũ (đọc .value/.text, bắt sự kiện change). -->
+                <select class="form-control-dark" name="bo_id" id="monSelect" style="display:none;">
+                    <option value="">-- Chọn bộ câu hỏi từ thư viện --</option>
+                </select>
+                <input type="hidden" name="mon_id" id="fMonId">
+                <!-- Dropdown tùy biến: mỗi dòng flex -> thời gian căn sát phải. -->
+                <div class="bo-dd" id="boDD">
+                    <button type="button" class="bo-dd-toggle form-control-dark" id="boDDToggle">
+                        <span class="bo-left" id="boDDleft">-- Chọn bộ câu hỏi từ thư viện --</span>
+                        <span class="bo-time" id="boDDtime"></span>
+                        <i class="fas fa-chevron-down bo-caret"></i>
+                    </button>
+                    <div class="bo-dd-panel" id="boDDpanel"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ BƯỚC 2: CẤU TRÚC ĐỀ ============ -->
+        <div class="tdt-card tdt-panel" data-panel="2">
+            <div class="tdt-head">
+                <h3><span class="badge-step">2</span> Cấu trúc đề</h3>
+                <p id="structHint" class="struct-hint">Chọn bộ câu hỏi ở Bước 1 để nạp cấu trúc đề.</p>
+            </div>
+
+            <div class="d-flex gap-4 flex-wrap align-items-end mb-3">
+                <div class="tdt-field" style="margin:0;">
+                    <label>Số lượng đề</label>
+                    <input type="number" class="num-box" name="so_luong_de" id="iSoLuong"
+                           min="1" max="20" value="1">
+                </div>
+                <div class="tdt-field" style="margin:0;">
+                    <label>Tổng số câu mỗi đề</label>
+                    <input type="number" class="num-box" id="iWantTotal" min="0" value="10">
+                </div>
+                <div class="switch-row" style="margin-left:auto;">
+                    <input class="tdt-check" type="checkbox" name="tron_cau_hoi" value="1" id="swQ">
+                    <label for="swQ"><strong>Trộn thứ tự câu hỏi</strong></label>
+                </div>
+                <div class="switch-row">
+                    <input class="tdt-check" type="checkbox" name="tron_dap_an" value="1" id="swA">
+                    <label for="swA"><strong>Trộn thứ tự đáp án</strong></label>
+                </div>
+            </div>
+            <div class="subtab">
+                <button type="button" class="active" data-sub="matrix">Theo ma trận</button>
+                <button type="button" data-sub="manual">Chọn thủ công</button>
+            </div>
+
+            <div class="subtab-body">
+            <!-- Theo ma trận -->
+            <div id="subMatrix">
+                <div class="d-flex gap-3 flex-wrap align-items-end mb-2">
+                    <div class="tdt-field" style="margin:0;">
+                        <label class="chip-de">% Dễ</label>
+                        <input type="number" class="num-box" id="iPctDe" min="0" max="100" value="30">
+                    </div>
+                    <div class="tdt-field" style="margin:0;">
+                        <label class="chip-tb">% Trung bình</label>
+                        <input type="number" class="num-box" id="iPctTb" min="0" max="100" value="40">
+                    </div>
+                    <div class="tdt-field" style="margin:0;">
+                        <label class="chip-kho">% Khó</label>
+                        <input type="number" class="num-box" id="iPctKho" min="0" max="100" value="30">
+                    </div>
+                    <button type="button" class="btn-back" id="btnAutoFill" style="margin-left:auto;">
+                        Tự điền
+                    </button>
+                    <button type="button" class="btn-back" id="btnResetMatrix">
+                        <i class="fas fa-eraser"></i> Xóa
+                    </button>
+                </div>
+                <div id="autoWarn" class="auto-warn" style="display:none;"></div>
+                <div style="overflow-x:auto;">
+                    <table class="mt-table" id="matrixTable">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;"></th>
+                                <th class="chip-de">Dễ</th>
+                                <th class="chip-tb">Trung bình</th>
+                                <th class="chip-kho">Khó</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matrixBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Chọn thủ công -->
+            <div id="subManual" class="hidden">
+                <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                    <button type="button" class="btn-back" id="btnSelectAll"><i class="fas fa-check-double"></i> Chọn tất cả</button>
+                    <button type="button" class="btn-back" id="btnClearAll"><i class="fas fa-xmark"></i> Bỏ chọn</button>
+                    <select class="form-control-dark" id="filterDoKho" style="width:auto; padding:6px 12px;">
+                        <option value="">Độ khó</option>
+                        <option value="Dễ">Dễ</option>
+                        <option value="Trung bình">Trung bình</option>
+                        <option value="Khó">Khó</option>
+                    </select>
+                    <span class="badge-count" id="selCount">Đã chọn: 0</span>
+                </div>
+                <div class="q-list" id="qList"></div>
+            </div>
+            </div><!-- /.subtab-body -->
+
+            <div class="tdt-nav mt-3" style="justify-content:flex-end;">
+                <button type="button" class="btn-tdt" id="btnBuild">Tiếp tục <i class="fas fa-arrow-right"></i></button>
+            </div>
+        </div>
+
+        </div><!-- /.tdt-stage12 -->
+
+        <!-- ===== KHỐI GỘP BƯỚC 3 + BƯỚC 4 (cùng 1 trang, xếp ngang full màn) ===== -->
+        <div class="tdt-stage34">
+
+        <!-- ============ BƯỚC 3: THÔNG TIN ĐỀ ============ -->
+        <div class="tdt-card tdt-panel" data-panel="3">
+            <div class="tdt-head">
+                <h3><span class="badge-step">3</span> Thông tin đề thi</h3>
+                <p>Các thông tin in lên đầu đề theo mẫu của trường.</p>
+            </div>
+            <div class="tdt-grid2">
+                <div class="tdt-field" style="grid-column:1 / -1;">
+                    <label>Tên đề thi <span class="req">*</span></label>
+                    <input type="text" class="form-control-dark" name="ten_de" id="iTenDe"
+                           placeholder="VD: Đề thi kết thúc học phần Cơ sở dữ liệu">
+                </div>
+                <div class="tdt-field">
+                    <label>Tên học phần</label>
+                    <input type="text" class="form-control-dark" name="ten_hoc_phan" id="iTenHP"
+                           placeholder="Tự lấy từ môn ở Bước 1">
+                </div>
+                <div class="tdt-field">
+                    <label>Mã học phần</label>
+                    <input type="text" class="form-control-dark inp-sm" name="ma_mon" id="iMaMon"
+                           placeholder="Tự lấy từ môn ở Bước 1">
+                </div>
+            </div>
+            <div class="tdt-field" style="margin-top:10px;">
+                <label>Đơn vị quản lý học phần</label>
+                <input type="text" class="form-control-dark" name="don_vi" id="iDonVi"
+                       value="Khoa Thông tin và Truyền thông">
+            </div>
+            <div class="tdt-grid4" style="margin-top:10px;">
+                <div class="tdt-field">
+                    <label>Hình thức thi</label>
+                    <select class="form-control-dark" name="hinh_thuc" id="iHinhThuc">
+                        <option value="Cuối kỳ">Cuối kỳ (kết thúc HP)</option>
+                        <option value="Giữa kỳ">Giữa kỳ</option>
+                        <option value="Kiểm tra thường xuyên">Kiểm tra thường xuyên</option>
+                    </select>
+                </div>
+                <div class="tdt-field">
+                    <label>Học kỳ</label>
+                    <select class="form-control-dark" name="hoc_ky" id="iHocKy">
+                        <option value="">-- Chọn --</option>
+                        <option value="1">Học kỳ 1</option>
+                        <option value="2">Học kỳ 2</option>
+                        <option value="Hè">Học kỳ hè</option>
+                    </select>
+                </div>
+                <div class="tdt-field">
+                    <label>Năm học</label>
+                    <select class="form-control-dark" name="nam_hoc" id="iNamHoc">
+                        <option value="">-- Chọn --</option>
+                        <option value="2024 - 2025">2024 - 2025</option>
+                        <option value="2025 - 2026">2025 - 2026</option>
+                        <option value="2026 - 2027">2026 - 2027</option>
+                        <option value="2027 - 2028">2027 - 2028</option>
+                        <option value="2028 - 2029">2028 - 2029</option>
+                        <option value="2029 - 2030">2029 - 2030</option>
+                    </select>
+                </div>
+                <div class="tdt-field">
+                    <label>Thời gian làm bài (phút)</label>
+                    <input type="number" class="form-control-dark" name="thoi_gian" id="iThoiGian"
+                           min="1" value="60">
+                </div>
+            </div>
+            <div class="tdt-grid4" style="margin-top:10px;">
+                <div class="tdt-field">
+                    <label>Tổng điểm</label>
+                    <input type="number" class="form-control-dark inp-xs" name="tong_diem" id="iTongDiem"
+                           value="10" min="1" step="0.5">
+                </div>
+                <div class="tdt-field">
+                    <label>Mã đề</label>
+                    <input type="text" class="form-control-dark inp-ro" id="iMaDe" value="A01" readonly tabindex="-1">
+                    <p class="hint">Tự sinh theo số lượng đề (Bước 2).</p>
+                </div>
+            </div>
+            <div class="tdt-field" style="margin-top:10px;">
+                <label>Ghi chú</label>
+                <input list="ghiChuOpts" class="form-control-dark" name="ghi_chu" id="iGhiChu"
+                       placeholder="Chọn gợi ý có sẵn hoặc nhập ghi chú mới..."
+                       value="Thí sinh không được sử dụng tài liệu. Thí sinh nộp lại đề thi.">
+                <datalist id="ghiChuOpts">
+                    <option value="Thí sinh không được sử dụng tài liệu. Thí sinh nộp lại đề thi."></option>
+                    <option value="Thí sinh được sử dụng tài liệu. Thí sinh nộp lại đề thi."></option>
+                    <option value="Thí sinh không được sử dụng tài liệu và điện thoại."></option>
+                </datalist>
+            </div>
+            <div class="tdt-nav mt-3">
+                <button type="button" class="btn-back" data-back><i class="fas fa-arrow-left"></i> Quay lại</button>
+            </div>
+        </div>
+
+        <!-- ============ BƯỚC 4: XEM ĐỀ HOÀN CHỈNH & LƯU ============ -->
+        <div class="tdt-card tdt-panel" data-panel="4">
+            <div class="tdt-head">
+                <h3><span class="badge-step">4</span> Xem đề hoàn chỉnh</h3>
+                <p>Kiểm tra lại đề rồi bấm <b>Lưu đề thi</b>. Sau khi lưu, bạn xuất file
+                   <b>PDF</b> / <b>Word</b> ngay ở cột <b>Thao tác</b> của đề trong
+                   Thư viện &rarr; Đề thi.</p>
+            </div>
+
+            <div id="paperTabs" class="paper-tabs"></div>
+            <div id="paper"></div>
+
+            <div class="tdt-nav mt-3" style="justify-content:flex-end;">
+                <button type="submit" class="btn-tdt" id="btnSubmit"><i class="fas fa-floppy-disk"></i> Lưu đề thi</button>
+            </div>
+        </div>
+
+        </div><!-- /.tdt-stage34 -->
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const MON = {
+    ca_nhan: {{ mon_ca_nhan | tojson }},
+    chung:   {{ mon_chung   | tojson }}
+};
+const HOC_PHAN = {{ hoc_phan | tojson }};   // [{id, ma_hoc_phan, ten_hoc_phan, so_tin_chi}]
+const DK = ['Dễ', 'Trung bình', 'Khó'];
+const TITLE_MAP = {
+    'Cuối kỳ': 'ĐỀ THI KẾT THÚC HỌC PHẦN',
+    
+    'Giữa kỳ': 'ĐỀ THI GIỮA KỲ',
+    'Kiểm tra thường xuyên': 'ĐỀ KIỂM TRA THƯỜNG XUYÊN'
+};
+
+let pools = { ca_nhan: [], chung: [] };
+let loadedMonId = null;
+let selected = [];
+let variants = [];
+let curPaper = 0;
+let curStep = 1;
+let subMode = 'matrix';
+
+const el = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nguon   = () => el('fNguon').value;
+const srcPool = () => pools[nguon()] || [];
+const maDeOf  = i => 'A' + String(i).padStart(2, '0');
+const soLuong = () => Math.max(1, Math.min(20, parseInt(el('iSoLuong').value || 1) || 1));
+
+function shuffleArr(a){
+    for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+    return a;
+}
+function tronDapAn(q){
+    const letters = ['A','B','C','D'];
+    const correct = q['cau_' + String(q.dap_an_dung || 'A').trim().toLowerCase()];
+    const opts = shuffleArr([q.cau_a, q.cau_b, q.cau_c, q.cau_d]);
+    const nq = { ...q };
+    let nd = 'A';
+    opts.forEach((content, idx) => {
+        nq['cau_' + letters[idx].toLowerCase()] = content;
+        if (content === correct) nd = letters[idx];
+    });
+    nq.dap_an_dung = nd;
+    return nq;
+}
+// Dựng N mã đề. A01 giữ nguyên; A02... mới trộn nếu bật.
+function buildVariants(){
+    const n = soLuong();
+    const tronCH = el('swQ').checked;
+    const tronDA = el('swA').checked;
+    variants = [];
+    for (let i = 0; i < n; i++){
+        let list = selected.slice();
+        if (tronCH && i > 0) list = shuffleArr(list);
+        list = list.map(q => (tronDA && i > 0) ? tronDapAn(q) : { ...q });
+        variants.push(list);
+    }
+    if (curPaper >= variants.length) curPaper = 0;
+}
+
+function normDK(v){
+    const s = (v || '').toString().trim().toLowerCase();
+    if (s.indexOf('dễ') > -1 || s === 'de' || s.indexOf('easy') > -1) return 'Dễ';
+    if (s.indexOf('khó') > -1 || s.indexOf('hard') > -1) return 'Khó';
+    return 'Trung bình';
+}
+function chuongKey(q){ return (q.chuong == null || q.chuong === '') ? 'Khác' : String(q.chuong); }
+
+/* ============ ĐIỀU HƯỚNG BƯỚC ============ */
+function goStep(n){
+    curStep = n;
+    document.querySelectorAll('.tdt-panel').forEach(p => {
+        const pn = +p.dataset.panel;
+        // Bước 1&2 gộp 1 trang; Bước 3&4 gộp 1 trang (đều xếp ngang full màn).
+        const show = (n <= 2) ? (pn === 1 || pn === 2) : (pn === 3 || pn === 4);
+        p.classList.toggle('active', show);
+    });
+    if (n >= 3){ updateMaDe(); buildVariants(); renderPaperTabs(); renderPaper(curPaper); }
+    if (typeof tdtSave === 'function') tdtSave();   // lưu tiến trình mỗi khi đổi bước
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Hiện/ẩn dòng gợi ý + làm mờ thân Bước 2 khi CHƯA chọn bộ.
+function setStructLoading(state){
+    // state: 'empty' | 'loading' | 'ready'
+    const hint = el('structHint');
+    const lock = (state !== 'ready');
+    document.querySelector('.tdt-panel[data-panel="2"]').classList.toggle('struct-locked', lock);
+    if (!hint) return;
+    hint.style.display = lock ? 'block' : 'none';
+    hint.textContent = state === 'loading'
+        ? 'Đang tải câu hỏi...'
+        : 'Chọn bộ câu hỏi ở Bước 1 để nạp cấu trúc đề.';
+}
+
+// Nạp câu hỏi của BỘ đang chọn rồi dựng ma trận/danh sách (Bước 2). Tự gọi khi
+// chọn bộ ở Bước 1 -> "xong Bước 1 thì Bước 2 mới load", cả 2 vẫn chung 1 trang.
+function loadStructure(){
+    const monId = el('monSelect').value;
+    if (!monId){
+        pools = { ca_nhan: [], chung: [] };
+        loadedMonId = null; selected = [];
+        buildMatrix(); renderManualList(); renderSrcInfo();
+        setStructLoading('empty');
+        return;
+    }
+    if (loadedMonId === monId){ setStructLoading('ready'); _tdtFireAfterLoad(); return; }
+    const src = nguon();
+    setStructLoading('loading');
+    fetchPool(src, monId)
+        .then(list => {
+            pools = { ca_nhan: [], chung: [] };
+            pools[src] = list;
+            renderSrcInfo();
+            if (list.length === 0){
+                loadedMonId = null;
+                setStructLoading('empty');
+                el('structHint').textContent = 'Bộ câu hỏi này chưa có câu nào.';
+                return;
+            }
+            loadedMonId = monId;
+            selected = [];
+            buildMatrix();
+            renderManualList();
+            setStructLoading('ready');
+            _tdtFireAfterLoad();   // báo cho cơ chế khôi phục: pool đã sẵn sàng
+        })
+        .catch(err => {
+            if (err && err.code === 'AUTH'){
+                alert('Phiên đăng nhập đã hết hạn (hoặc tài khoản không phải giáo viên). '
+                    + 'Vui lòng đăng nhập lại bằng tài khoản giáo viên.');
+                window.location.href = '/login';
+            } else {
+                setStructLoading('empty');
+                el('structHint').textContent = 'Không tải được câu hỏi, vui lòng thử lại.';
+            }
+        });
+}
+
+document.querySelectorAll('[data-next]').forEach(b =>
+    b.addEventListener('click', () => { if (validateStep(curStep)) goStep(curStep + 1); }));
+document.querySelectorAll('[data-back]').forEach(b =>
+    b.addEventListener('click', () => goStep(curStep - 1)));
+
+function validateStep(n){
+    if (n === 3){
+        if (!el('iTenDe').value.trim()){ alert('Vui lòng nhập tên đề thi!'); el('iTenDe').focus(); return false; }
+    }
+    if (n === 4){
+        if (selected.length === 0){ alert('Chưa có câu nào trong đề!'); return false; }
+    }
+    return true;
+}
+
+/* ============ BƯỚC 1: NGUỒN + MÔN ============ */
+// Danh sách môn CHỈ theo nguồn đang chọn (cá nhân / chung). Nguồn rỗng -> không
+// xổ môn nào (tránh hiện môn của nguồn khác rồi lọc chẳng ra câu hỏi).
+const BO_PLACEHOLDER = '-- Chọn bộ câu hỏi từ thư viện --';
+// Tách nhãn 1 bộ thành: trái (mã - tên · số câu) | thời gian (căn sát phải).
+function boLabelParts(m){
+    const ma   = (m.ma_mon || '').trim();
+    const head = (ma ? ma + ' - ' : '') + (m.ten_mon || 'Môn');
+    const cau  = (m.so_cau != null ? '  ·  ' + m.so_cau + ' câu' : '');
+    const left = head + cau;
+    const time = (m.ngay_str || '');
+    return { left, time, full: left + (time ? '  ·  ' + time : '') };
+}
+function setBoToggle(left, time){
+    el('boDDleft').textContent = left;
+    el('boDDtime').textContent = time || '';
+}
+function renderMonSelect(){
+    const list = MON[nguon()] || [];
+    const sel = el('monSelect'), panel = el('boDDpanel');
+    // reset lựa chọn mỗi khi đổi nguồn
+    sel.value = ''; el('fMonId').value = '';
+    if (!list.length){
+        sel.innerHTML = '<option value="">-- Thư viện này chưa có bộ câu hỏi nào --</option>';
+        panel.innerHTML = '<div class="bo-dd-empty">Thư viện này chưa có bộ câu hỏi nào</div>';
+        setBoToggle('-- Thư viện này chưa có bộ câu hỏi nào --', '');
+        return;
+    }
+    setBoToggle(BO_PLACEHOLDER, '');
+    // <select> ẩn: text option = nhãn đầy đủ (examInfo dùng làm fallback tên môn)
+    sel.innerHTML = `<option value="">${BO_PLACEHOLDER}</option>` +
+        list.map(m => `<option value="${m.id}">${esc(boLabelParts(m).full)}</option>`).join('');
+    // panel: mỗi dòng flex -> thời gian dồn sát phải
+    panel.innerHTML = list.map(m => {
+        const p = boLabelParts(m);
+        return `<div class="bo-dd-item" data-id="${m.id}">`
+             + `<span class="bo-left">${esc(p.left)}</span>`
+             + (p.time ? `<span class="bo-time">${esc(p.time)}</span>` : '')
+             + `</div>`;
+    }).join('');
+    panel.querySelectorAll('.bo-dd-item').forEach(it =>
+        it.addEventListener('click', () => selectBo(it.dataset.id)));
+}
+function selectBo(id){
+    const m = (MON[nguon()] || []).find(x => String(x.id) === String(id));
+    el('monSelect').value = id;
+    if (m){ const p = boLabelParts(m); setBoToggle(p.left, p.time); }
+    el('boDDpanel').querySelectorAll('.bo-dd-item').forEach(it =>
+        it.classList.toggle('sel', it.dataset.id === String(id)));
+    el('boDD').classList.remove('open');
+    el('monSelect').dispatchEvent(new Event('change'));  // chạy logic cũ (set fMonId...)
+}
+// Mở/đóng dropdown + đóng khi click ra ngoài
+el('boDDToggle').addEventListener('click', e => {
+    e.stopPropagation();
+    el('boDD').classList.toggle('open');
+});
+document.addEventListener('click', e => {
+    if (!el('boDD').contains(e.target)) el('boDD').classList.remove('open');
+});
+
+// Tên + Mã học phần LẤY THẲNG từ MÔN đã chọn ở Bước 1 (không bắt chọn lại).
+// Chỉ điền 1 lần cho mỗi môn -> nếu người dùng tự sửa thì giữ nguyên chỉnh sửa đó.
+const _normTen = s => String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
+// Dò mã học phần từ danh mục theo TÊN môn (khi đề nguồn không nhúng sẵn mã).
+// Chỉ điền khi tên môn khớp DUY NHẤT 1 học phần để tránh điền nhầm mã (môn trùng tên nhiều mã).
+function maTuDanhMuc(tenMon){
+    const key = _normTen(tenMon);
+    if (!key) return '';
+    const hit = (HOC_PHAN || []).filter(h => _normTen(h.ten_hoc_phan) === key);
+    return hit.length === 1 ? (hit[0].ma_hoc_phan || '').trim() : '';
+}
+let hpFilledFor = null;
+function fillHocPhanFromSource(){
+    const monId = el('monSelect').value;
+    if (!monId || hpFilledFor === monId) return;
+    const entry = (MON[nguon()] || []).find(m => String(m.id) === String(monId))
+               || [...MON.ca_nhan, ...MON.chung].find(m => String(m.id) === String(monId));
+    if (!entry) return;
+    // monId ở đây là de_thi_id (bộ); mon_hoc_id thật nằm ở entry.mon_id -> đẩy vào
+    // hidden field để server lưu đề đúng môn.
+    el('fMonId').value = entry.mon_id || '';
+    el('iTenHP').value = entry.ten_mon || '';
+    // Ưu tiên mã nhúng sẵn trong đề nguồn; nếu trống thì dò theo tên trong danh mục học phần.
+    el('iMaMon').value = (entry.ma_mon || '').trim() || maTuDanhMuc(entry.ten_mon);
+    hpFilledFor = monId;
+}
+
+function fetchPool(src, deThiId){
+    return fetch(`/api/cau_hoi_nguon?nguon=${src}&de_thi_id=${deThiId}`, { credentials: 'same-origin' })
+        .then(r => {
+            // Bị chuyển hướng về trang đăng nhập / phản hồi không phải JSON
+            // => phiên đăng nhập đã hết HOẶC tài khoản không phải giáo viên.
+            const ct = r.headers.get('content-type') || '';
+            if (r.redirected || !r.ok || !ct.includes('application/json')){
+                const e = new Error('AUTH'); e.code = 'AUTH'; throw e;
+            }
+            return r.json();
+        })
+        .then(d => (d.cau_hois || []).map(q =>
+            ({ ...q, _dk: normDK(q.do_kho), _ch: chuongKey(q), _src: src })));
+}
+
+function setActiveSrc(src){
+    document.querySelectorAll('.src-opt').forEach(o => o.classList.toggle('active', o.dataset.nguon === src));
+    el('fNguon').value = src;
+}
+
+// Chọn thư viện nguồn (cá nhân/chung) -> đổi danh sách môn theo nguồn, reset lựa chọn.
+document.querySelectorAll('.src-opt').forEach(opt =>
+    opt.addEventListener('click', function(){
+        const src = this.dataset.nguon;
+        if (src === nguon()) return;
+        setActiveSrc(src);
+        loadedMonId = null;
+        hpFilledFor = null;
+        renderMonSelect();
+        loadStructure();      // nguồn mới chưa chọn bộ -> xóa cấu trúc + hiện gợi ý
+    }));
+
+el('monSelect').addEventListener('change', () => {
+    hpFilledFor = null;
+    // Đẩy ngay mon_hoc_id của bộ vừa chọn vào hidden field (server cần để lưu đề).
+    const id = el('monSelect').value;
+    const entry = (MON[nguon()] || []).find(m => String(m.id) === String(id));
+    el('fMonId').value = entry ? (entry.mon_id || '') : '';
+    loadStructure();          // chọn bộ xong -> TỰ nạp Bước 2 (cùng trang)
+});
+
+function renderSrcInfo(){
+    // An toàn với null: nếu template không có ô đếm thì bỏ qua, KHÔNG để
+    // ném lỗi làm hỏng cả luồng tải câu hỏi (gây "Không tải được câu hỏi").
+    const a = el('cntCaNhan'), b = el('cntChung');
+    if (a) a.textContent = pools.ca_nhan.length + ' câu';
+    if (b) b.textContent = pools.chung.length + ' câu';
+}
+
+/* ============ BƯỚC 2: CẤU TRÚC (MA TRẬN / THỦ CÔNG) ============ */
+function updateMaDe(){
+    const n = soLuong();
+    el('iMaDe').value = n > 1 ? `A01 → ${maDeOf(n)}` : 'A01';
+}
+el('iSoLuong').addEventListener('input', updateMaDe);
+
+function poolStats(){
+    const stat = {};
+    srcPool().forEach(q => {
+        const c = q._ch;
+        stat[c] = stat[c] || {'Dễ':0,'Trung bình':0,'Khó':0};
+        stat[c][q._dk]++;
+    });
+    return stat;
+}
+
+function buildMatrix(){
+    const stat = poolStats();
+    const chuongs = Object.keys(stat).sort((a,b) => {
+        const na = parseInt(a), nb = parseInt(b);
+        if (!isNaN(na) && !isNaN(nb)) return na - nb;
+        return a.localeCompare(b);
+    });
+    el('matrixBody').innerHTML = chuongs.map(c => {
+        const s = stat[c];
+        const cell = dk => {
+            const av = s[dk];
+            return `<td>
+                <span class="mt-cellbox">
+                    <input type="number" class="mt-input mt-cell" data-ch="${esc(c)}" data-dk="${dk}"
+                           min="0" max="${av}" value="0" ${av === 0 ? 'disabled' : ''}>
+                    <span class="avail">/ ${av}</span>
+                </span></td>`;
+        };
+        return `<tr>
+            <td class="chuong-cell">${c === 'Khác' ? 'Chưa rõ chương' : 'Chương ' + esc(c)}</td>
+            ${cell('Dễ')}${cell('Trung bình')}${cell('Khó')}
+        </tr>`;
+    }).join('') || '<tr><td colspan="4" class="text-muted small p-3">Nguồn này chưa có câu hỏi cho môn đã chọn.</td></tr>';
+    document.querySelectorAll('.mt-cell').forEach(inp => inp.addEventListener('input', onMatrixInput));
+    recalcMatrix();
+}
+
+function onMatrixInput(e){
+    const inp = e.target;
+    const max = +inp.max, v = parseInt(inp.value || 0);
+    if (v > max) inp.value = max;
+    if (v < 0 || isNaN(v)) inp.value = 0;
+    recalcMatrix();
+}
+
+function recalcMatrix(){
+    // Đã bỏ thống kê tổng (theo chương & theo độ khó) ở Bước 2 — không cần tính nữa.
+}
+
+// Quy "tổng số câu" theo % ra số câu mỗi mức, đảm bảo TỔNG ĐÚNG = total
+// (phân bổ phần lẻ làm tròn theo phần thập phân lớn nhất — largest remainder).
+function splitByPct(total, pct) {
+    const psum = DK.reduce((a, d) => a + pct[d], 0) || 1;
+    const base = {}, frac = [];
+    let used = 0;
+    DK.forEach(d => {
+        const exact = total * pct[d] / psum;
+        base[d] = Math.floor(exact);
+        used += base[d];
+        frac.push([d, exact - base[d]]);
+    });
+    let rem = total - used;
+    frac.sort((a, b) => b[1] - a[1]);
+    for (let i = 0; i < frac.length && rem > 0; i++) { base[frac[i][0]]++; rem--; }
+    return base;
+}
+
+// Rải ĐỀU n câu của 1 độ khó vào các chương (round-robin: mỗi vòng +1 cho từng chương
+// còn chỗ), tôn trọng số câu có sẵn của mỗi ô. Trả về số câu THỰC điền được.
+function spreadEven(dk, n) {
+    const cells = [...document.querySelectorAll(`.mt-cell[data-dk="${dk}"]`)];
+    const counts = cells.map(() => 0);
+    let remain = n, progress = true;
+    while (remain > 0 && progress) {
+        progress = false;
+        for (let i = 0; i < cells.length && remain > 0; i++) {
+            if (counts[i] < (+cells[i].max)) { counts[i]++; remain--; progress = true; }
+        }
+    }
+    cells.forEach((c, i) => c.value = counts[i]);
+    return n - remain;
+}
+
+el('btnAutoFill').addEventListener('click', () => {
+    const total = Math.max(0, parseInt(el('iWantTotal').value || 0) || 0);
+    const pct = {
+        'Dễ':         Math.max(0, parseInt(el('iPctDe').value  || 0) || 0),
+        'Trung bình': Math.max(0, parseInt(el('iPctTb').value  || 0) || 0),
+        'Khó':        Math.max(0, parseInt(el('iPctKho').value || 0) || 0),
+    };
+    const want = splitByPct(total, pct);   // tổng = total
+    document.querySelectorAll('.mt-cell').forEach(i => i.value = 0);
+
+    let filled = 0;
+    const thieu = [];
+    DK.forEach(d => {
+        const got = spreadEven(d, want[d]);     // tự chặn theo số câu có sẵn
+        filled += got;
+        if (got < want[d]) thieu.push(`${want[d] - got} câu ${d}`);
+    });
+    recalcMatrix();
+
+    // Cảnh báo nếu nguồn không đủ câu để điền đủ tổng
+    const warn = el('autoWarn');
+    if (filled < total) {
+        warn.style.display = '';
+        warn.innerHTML = '<i class="fas fa-triangle-exclamation"></i><span>Nguồn chỉ đủ <strong>'
+            + filled + '/' + total + '</strong> câu'
+            + (thieu.length ? ' — thiếu ' + thieu.join(', ') : '')
+            + '. Đã điền tối đa có thể; hãy giảm tổng số câu hoặc đổi % cho khớp số câu nguồn có.</span>';
+    } else {
+        warn.style.display = 'none';
+    }
+});
+el('btnResetMatrix').addEventListener('click', () => {
+    document.querySelectorAll('.mt-cell').forEach(i => i.value = 0);
+    const w = el('autoWarn'); if (w) w.style.display = 'none';
+    recalcMatrix();
+});
+
+// 3 ô % LUÔN cộng lại = 100: đổi 1 ô -> 2 ô còn lại tự chia phần còn lại theo tỉ lệ hiện có
+function balancePct(changedId) {
+    const ids = ['iPctDe', 'iPctTb', 'iPctKho'];
+    let v = Math.max(0, Math.min(100, parseInt(el(changedId).value || 0) || 0));
+    el(changedId).value = v;
+    const others = ids.filter(id => id !== changedId);
+    const remaining = 100 - v;
+    const o0 = parseInt(el(others[0]).value || 0) || 0;
+    const o1 = parseInt(el(others[1]).value || 0) || 0;
+    const sumO = o0 + o1;
+    const a = sumO <= 0 ? Math.round(remaining / 2) : Math.round(remaining * o0 / sumO);
+    el(others[0]).value = a;
+    el(others[1]).value = remaining - a;
+}
+['iPctDe', 'iPctTb', 'iPctKho'].forEach(id =>
+    el(id).addEventListener('change', function () { balancePct(id); }));
+
+// chuyển tab phụ (ma trận / thủ công)
+document.querySelectorAll('.subtab button').forEach(b =>
+    b.addEventListener('click', function(){
+        subMode = this.dataset.sub;
+        document.querySelectorAll('.subtab button').forEach(x => x.classList.remove('active'));
+        this.classList.add('active');
+        el('subMatrix').classList.toggle('hidden', subMode !== 'matrix');
+        el('subManual').classList.toggle('hidden', subMode !== 'manual');
+    }));
+
+/* ---- Chọn thủ công ---- */
+function dkClass(dk){ return dk === 'Dễ' ? 'q-de' : dk === 'Khó' ? 'q-kho' : 'q-tb'; }
+function renderManualList(){
+    el('qList').innerHTML = srcPool().map(q => `
+        <label class="q-item" data-dokho="${esc(q._dk)}">
+            <input type="checkbox" value="${q.id}" class="q-check tdt-check" onchange="updateSelCount()">
+            <div>
+                <div class="q-noidung">${esc(q.noi_dung)}</div>
+                <div class="q-meta">
+                    <span class="q-badge ${dkClass(q._dk)}">${esc(q._dk)}</span>
+                    ${q._ch !== 'Khác' ? ' · Chương ' + esc(q._ch) : ''}
+                </div>
+            </div>
+        </label>`).join('') ||
+        '<p class="text-muted small m-2">Nguồn này chưa có câu hỏi nào cho môn đã chọn.</p>';
+    applyFilter();
+    updateSelCount();
+}
+function applyFilter(){
+    const f = el('filterDoKho').value;
+    document.querySelectorAll('#qList .q-item').forEach(it =>
+        it.style.display = (!f || it.dataset.dokho === f) ? '' : 'none');
+}
+window.updateSelCount = function(){
+    el('selCount').textContent = 'Đã chọn: ' + document.querySelectorAll('.q-check:checked').length;
+};
+el('filterDoKho').addEventListener('change', applyFilter);
+el('btnSelectAll').addEventListener('click', () =>
+    { document.querySelectorAll('.q-check').forEach(c => { if (c.offsetParent !== null) c.checked = true; }); updateSelCount(); });
+el('btnClearAll').addEventListener('click', () =>
+    { document.querySelectorAll('.q-check').forEach(c => c.checked = false); updateSelCount(); });
+
+/* ---- "Tiếp tục" ở bước 2: dựng danh sách câu đã chốt ---- */
+function sample(arr, n){
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+    return a.slice(0, n);
+}
+
+el('btnBuild').addEventListener('click', () => {
+    if (subMode === 'matrix'){
+        const cells = [...document.querySelectorAll('.mt-cell')]
+            .filter(i => (parseInt(i.value || 0) || 0) > 0);
+        if (cells.length === 0){
+            alert('Ma trận đang trống! Nhập số câu cho ít nhất một ô (hoặc dùng nút Tự điền).');
+            return;
+        }
+        const src = srcPool();
+        const picked = [], thieu = [];
+        cells.forEach(inp => {
+            const ch = inp.dataset.ch, dk = inp.dataset.dk, n = parseInt(inp.value);
+            const bucket = src.filter(q => q._ch === ch && q._dk === dk);
+            if (bucket.length < n)
+                thieu.push(`- Chương ${ch} (${dk}): cần ${n}, nguồn chỉ có ${bucket.length}`);
+            picked.push(...sample(bucket, Math.min(n, bucket.length)));
+        });
+        if (picked.length === 0){
+            alert('Nguồn đã chọn không có câu nào khớp ma trận. Hãy đổi nguồn hoặc sửa ma trận.');
+            return;
+        }
+        if (thieu.length &&
+            !confirm('Nguồn đã chọn không đủ câu theo ma trận:\n' + thieu.join('\n') +
+                     '\n\nTiếp tục với số câu hiện có?')) return;
+        selected = picked;
+    } else {
+        const ids = [...document.querySelectorAll('.q-check:checked')].map(c => +c.value);
+        if (ids.length === 0){ alert('Bạn chưa chọn câu hỏi nào!'); return; }
+        const pool = srcPool();
+        selected = ids.map(id => pool.find(q => q.id === id)).filter(Boolean);
+    }
+    fillHocPhanFromSource();
+    goStep(3);
+});
+
+/* ============ DANH SÁCH ĐÃ CHỌN + ĐỔI CÂU (bước 4) ============ */
+// (Đã bỏ chức năng "Chỉnh câu hỏi" ở Bước 4 — không còn pickList/swap/remove/reroll.)
+function refreshPreview(){ buildVariants(); renderPaperTabs(); renderPaper(curPaper); }
+
+// Bật/tắt trộn -> dựng lại preview
+['swQ','swA'].forEach(id => el(id).addEventListener('change', () => {
+    if (curStep >= 3) refreshPreview();
+}));
+
+// Sửa thông tin đề (bước 3) -> cập nhật đầu đề ở phần xem trước (bước 4) ngay,
+// vì 2 bước giờ nằm cạnh nhau trên cùng một trang.
+const _stage3 = document.querySelector('.tdt-panel[data-panel="3"]');
+['input','change'].forEach(ev => _stage3.addEventListener(ev, () => {
+    if (curStep >= 3) renderPaper(curPaper);
+}));
+
+/* ============ THÔNG TIN ĐỀ + DỰNG ĐẦU ĐỀ (mẫu 3_2) ============ */
+function fmtDiem(v){
+    if (!isFinite(v)) return '0';
+    return (Math.round(v * 100) / 100).toString().replace(/\.0+$/,'').replace(/(\.\d*?)0+$/,'$1');
+}
+function examInfo(){
+    const monTxt = (el('monSelect').options[el('monSelect').selectedIndex]?.text || '').trim();
+    const tenHP  = el('iTenHP').value.trim() || monTxt;
+    const maHP   = el('iMaMon').value.trim();
+    const hinhThuc = el('iHinhThuc').value;
+    const hk = el('iHocKy').value, ny = el('iNamHoc').value.trim();
+    const tongDiem = parseFloat(el('iTongDiem').value) || 0;
+    return {
+        ten:     el('iTenDe').value.trim() || 'Đề thi',
+        title:   TITLE_MAP[hinhThuc] || 'ĐỀ THI KẾT THÚC HỌC PHẦN',
+        tenHP, maHP,
+        donVi:   el('iDonVi').value.trim(),
+        hocKy:   hk, namHoc: ny,
+        thoiGian: parseInt(el('iThoiGian').value || 0) || 0,
+        tongDiem,
+        ghiChu:  el('iGhiChu').value.trim()
+    };
+}
+
+function renderPaperTabs(){
+    if (variants.length <= 1){ el('paperTabs').innerHTML = ''; return; }
+    el('paperTabs').innerHTML = variants.map((_, idx) =>
+        `<button type="button" class="${idx === curPaper ? 'active' : ''}"
+                 onclick="showPaper(${idx})">Mã đề ${maDeOf(idx+1)}</button>`).join('');
+}
+window.showPaper = function(idx){ curPaper = idx; renderPaperTabs(); renderPaper(idx); };
+
+// Xem trước dạng ĐỀ THI ONLINE (giống trang Xem đề trong thư viện). Có tô đáp án đúng
+// để GV kiểm; bản In/Tải theo Mẫu 3.2 xuất ở Thư viện sau khi lưu (route /export_exam).
+function renderPaper(idx){
+    idx = idx || 0;
+    const ds  = variants[idx] || selected;
+    const inf = examInfo();
+    let html = `<div class="ol-head">
+        <div class="ol-title">${esc(inf.ten)}</div>
+        <div class="ol-meta">
+            <span class="ol-badge"><i class="fas fa-hashtag"></i> Mã đề ${maDeOf(idx+1)}</span>
+            <span class="ol-badge"><i class="fas fa-book"></i> ${esc(inf.tenHP) || '—'}${inf.maHP ? ' (' + esc(inf.maHP) + ')' : ''}</span>
+            <span class="ol-badge"><i class="fas fa-list-ol"></i> ${ds.length} câu</span>
+            <span class="ol-badge"><i class="fas fa-clock"></i> ${inf.thoiGian || '—'} phút</span>
+            <span class="ol-badge"><i class="fas fa-star"></i> ${fmtDiem(inf.tongDiem)} điểm</span>
+        </div>
+    </div>`;
+    html += ds.map((q, i) => {
+        const opts = [['A',q.cau_a],['B',q.cau_b],['C',q.cau_c],['D',q.cau_d]];
+        const dap  = (q.dap_an_dung || '').trim().toUpperCase();
+        const chuong = q._ch && q._ch !== 'Khác' ? q._ch : (q.chuong || '');
+        const dk   = q._dk || q.do_kho || '';
+        return `<div class="ol-card">
+            <div class="ol-card-head">
+                <span class="ol-qnum"><i class="fas fa-circle-dot"></i> Câu ${i+1}</span>
+                ${chuong ? `<span class="ol-chip ol-chip-ch">Chương ${esc(chuong)}</span>` : ''}
+                ${dk ? `<span class="q-badge ${dkClass(dk)}">${esc(dk)}</span>` : ''}
+            </div>
+            <div class="ol-q">${esc(q.noi_dung)}</div>
+            <div class="ol-opts">${opts.map(([l,t]) =>
+                `<div class="ol-opt ${dap === l ? 'correct' : ''}">
+                    <span class="ol-let">${l}</span>
+                    <span class="ol-txt">${esc(t)}</span>
+                    ${dap === l ? '<span class="ol-mark"><i class="fas fa-check-circle"></i> Đáp án đúng</span>' : ''}
+                </div>`).join('')}</div>
+        </div>`;
+    }).join('');
+    el('paper').innerHTML = html;
+}
+
+/* Xuất PDF/Word đã chuyển sang server: nút nằm ở cột Thao tác của đề trong
+   Thư viện (route /export_exam/<id>), dựng lại MẪU 3.2 từ dữ liệu đã lưu. */
+
+/* ============ GỬI FORM ============ */
+el('tdtForm').addEventListener('submit', function(e){
+    if (curStep < 3){ e.preventDefault(); return; }
+    if (!el('iTenDe').value.trim()){
+        e.preventDefault(); alert('Vui lòng nhập tên đề thi!'); el('iTenDe').focus(); return;
+    }
+    if (selected.length === 0){ e.preventDefault(); alert('Chưa có câu nào trong đề!'); return; }
+    try { sessionStorage.removeItem(TDT_KEY); } catch (err) {}   // đã lưu đề -> bỏ tiến trình nháp
+    el('selectedInputs').innerHTML = selected.map(q =>
+        `<input type="hidden" name="selected_ids" value="${q.id}">`).join('');
+    if (!variants.length) buildVariants();
+    el('fVariants').value = JSON.stringify(variants.map(ds => ds.map(q => ({
+        id: q.id, cau_a: q.cau_a, cau_b: q.cau_b,
+        cau_c: q.cau_c, cau_d: q.cau_d, dap_an_dung: q.dap_an_dung
+    }))));
+    el('btnSubmit').disabled = true;
+    el('btnSubmit').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
+});
+
+/* ============================================================
+   GIỮ TIẾN TRÌNH "Tạo đề thi" khi lỡ chuyển tab / reload trang
+   Lưu: nguồn, bộ/môn, ma trận hoặc câu đã chọn, câu đã chốt,
+        thông tin đề, số mã đề, trộn, bước hiện tại -> sessionStorage.
+   Khôi phục: chọn lại bộ -> CHỜ pool tải xong -> áp lại mọi thứ.
+   ============================================================ */
+var TDT_KEY = 'sq_tao_de_state';
+var tdtRestoring = false;   // bật trong lúc khôi phục -> không lưu đè state đang đọc
+
+// Được loadStructure() gọi khi pool đã sẵn sàng (xem 2 chỗ _tdtFireAfterLoad).
+function _tdtFireAfterLoad(){
+    if (window.__tdtAfterLoad){
+        var cb = window.__tdtAfterLoad; window.__tdtAfterLoad = null;
+        try { cb(); } catch (e) {}
+    }
+}
+
+function tdtCollect(){
+    var mon = el('monSelect').value;
+    if (!mon) return null;                       // chưa chọn bộ -> chưa có gì để mất
+    var cells = {};
+    document.querySelectorAll('.mt-cell').forEach(function (i){
+        var v = parseInt(i.value || 0) || 0;
+        if (v > 0) cells[i.dataset.ch + '|' + i.dataset.dk] = v;
+    });
+    var manualIds = [].map.call(document.querySelectorAll('.q-check:checked'), function (c){ return +c.value; });
+    var info = {};
+    ['iTenDe','iHinhThuc','iHocKy','iNamHoc','iDonVi','iThoiGian','iTongDiem','iGhiChu','iTenHP','iMaMon']
+        .forEach(function (id){ var e = el(id); if (e) info[id] = e.value; });
+    return {
+        src: nguon(), mon: mon, subMode: subMode,
+        cells: cells, manualIds: manualIds,
+        selectedIds: selected.map(function (q){ return q.id; }),
+        step: curStep,
+        soLuong: el('iSoLuong') ? el('iSoLuong').value : '',
+        swQ: el('swQ') ? el('swQ').checked : false,
+        swA: el('swA') ? el('swA').checked : false,
+        autofill: {
+            total: el('iWantTotal') ? el('iWantTotal').value : '',
+            de:    el('iPctDe')  ? el('iPctDe').value  : '',
+            tb:    el('iPctTb')  ? el('iPctTb').value  : '',
+            kho:   el('iPctKho') ? el('iPctKho').value : ''
+        },
+        info: info, ts: Date.now()
+    };
+}
+function tdtSave(){
+    if (tdtRestoring) return;   // đang khôi phục -> chưa lưu (tránh ghi đè state rỗng)
+    try { var s = tdtCollect(); if (s) sessionStorage.setItem(TDT_KEY, JSON.stringify(s)); } catch (e) {}
+}
+// Lưu khi người dùng gõ/đổi bất cứ thứ gì trong wizard
+document.addEventListener('input',  tdtSave);
+document.addEventListener('change', tdtSave);
+
+function tdtShowBanner(){
+    if (document.getElementById('tdtRestoredNote')) return;
+    // Dùng TOAST góc trên-phải (hệ thống .flash-container) -> KHÔNG đẩy lệch bố cục
+    var c = document.querySelector('.flash-container');
+    if (!c){ c = document.createElement('div'); c.className = 'flash-container'; document.body.appendChild(c); }
+    var t = document.createElement('div');
+    t.id = 'tdtRestoredNote';
+    t.className = 'flash-toast flash-info';
+    t.setAttribute('role', 'alert');
+    t.innerHTML =
+        '<span class="flash-icon"><i class="fas fa-clock-rotate-left"></i></span>' +
+        '<div class="flash-body">Đã khôi phục đề thi bạn đang làm dở.' +
+            '<div style="margin-top:8px;">' +
+            '<button type="button" id="tdtRestartBtn" style="display:inline-flex;align-items:center;gap:6px;' +
+            'background:#eff6ff;border:1px solid #bfdbfe;color:#2563eb;font-weight:700;font-size:.8rem;' +
+            'padding:6px 12px;border-radius:8px;cursor:pointer;">' +
+            '<i class="fas fa-rotate-left"></i> Bắt đầu lại</button></div></div>' +
+        '<button type="button" class="flash-close" aria-label="Đóng">&times;</button>';
+    c.appendChild(t);
+    requestAnimationFrame(function(){ t.classList.add('show'); });
+    function close(){ t.classList.add('hide'); t.classList.remove('show'); setTimeout(function(){ t.remove(); }, 380); }
+    t.querySelector('.flash-close').addEventListener('click', close);
+    el('tdtRestartBtn').addEventListener('click', function (){
+        try { sessionStorage.removeItem(TDT_KEY); } catch (e) {}
+        location.reload();                        // làm mới sạch cho wizard phức tạp
+    });
+}
+
+function tdtRestore(){
+    var s;
+    try { s = JSON.parse(sessionStorage.getItem(TDT_KEY) || 'null'); } catch (e) { return; }
+    if (!s || !s.mon) return;
+
+    if (s.src && s.src !== nguon()) setActiveSrc(s.src);
+    renderMonSelect();
+
+    var monSel = el('monSelect');
+    var coBo = [].some.call(monSel.options, function (o){ return o.value === String(s.mon); });
+    if (!coBo) return;                            // bộ không còn -> bỏ khôi phục
+
+    // Khi pool tải xong -> áp lại toàn bộ trạng thái
+    window.__tdtAfterLoad = function (){
+        // Chế độ ma trận / thủ công
+        var subBtn = document.querySelector('.subtab button[data-sub="' + s.subMode + '"]');
+        if (subBtn) subBtn.click();
+
+        // Ma trận
+        if (s.cells) Object.keys(s.cells).forEach(function (k){
+            var p = k.split('|');
+            var cell = document.querySelector('.mt-cell[data-ch="' + (window.CSS && CSS.escape ? CSS.escape(p[0]) : p[0]) + '"][data-dk="' + p[1] + '"]');
+            if (cell && !cell.disabled) cell.value = s.cells[k];
+        });
+        // Chọn thủ công
+        if (s.manualIds && s.manualIds.length){
+            s.manualIds.forEach(function (id){
+                var c = document.querySelector('.q-check[value="' + id + '"]');
+                if (c) c.checked = true;
+            });
+            if (window.updateSelCount) updateSelCount();
+        }
+        // Thông tin đề + số mã đề + trộn + auto-fill
+        if (s.info) Object.keys(s.info).forEach(function (id){ var e = el(id); if (e) e.value = s.info[id]; });
+        if (s.soLuong && el('iSoLuong')) el('iSoLuong').value = s.soLuong;
+        if (el('swQ')) el('swQ').checked = !!s.swQ;
+        if (el('swA')) el('swA').checked = !!s.swA;
+        if (s.autofill){
+            if (el('iWantTotal') && s.autofill.total !== '') el('iWantTotal').value = s.autofill.total;
+            if (el('iPctDe'))  el('iPctDe').value  = s.autofill.de;
+            if (el('iPctTb'))  el('iPctTb').value  = s.autofill.tb;
+            if (el('iPctKho')) el('iPctKho').value = s.autofill.kho;
+        }
+        updateMaDe();
+
+        // Câu đã chốt (cho bước 3-4): dựng lại từ ĐÚNG id đã chọn (không random lại)
+        if (s.selectedIds && s.selectedIds.length){
+            var pool = srcPool();
+            selected = s.selectedIds
+                .map(function (id){ return pool.find(function (q){ return q.id === id; }); })
+                .filter(Boolean);
+        }
+
+        // Về đúng bước (nếu bước 3-4 mà mất câu đã chốt thì lùi về 2)
+        var step = s.step || 1;
+        if (step >= 3 && selected.length === 0) step = 2;
+        tdtRestoring = false;        // mở lại việc lưu -> goStep() bên dưới ghi state đã khôi phục
+        goStep(step);
+
+        tdtShowBanner();
+    };
+
+    tdtRestoring = true;                          // khoá lưu trong lúc nạp pool
+    selectBo(String(s.mon));                      // chọn bộ (cập nhật nhãn) + dispatch change -> nạp pool
+}
+
+/* ============ KHỞI TẠO ============ */
+renderMonSelect();
+updateMaDe();
+setStructLoading('empty');   // Bước 2 mờ + gợi ý cho tới khi chọn bộ ở Bước 1
+goStep(1);
+tdtRestore();                // khôi phục tiến trình nếu có (sau khi đã khởi tạo xong)
+</script>
+{% endblock %}

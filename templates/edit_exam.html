@@ -1,0 +1,333 @@
+{#
+  edit_exam.html — SỬA CÂU HỎI trong một bộ/đề đã lưu.
+
+  Giáo viên sửa được nội dung câu, bốn phương án, đáp án đúng, độ khó, mức Bloom
+  và phần giải thích. Dùng để chữa những câu AI làm sai — nhất là câu chọn nhầm
+  đáp án đúng.
+#}
+{% extends "base.html" %}
+
+{% block title %}Sửa Đề Thi - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Font giống trang Đăng nhập + đồng nhất cỡ chữ 0.8rem toàn form */
+    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
+    .ee-page { font-family: 'Be Vietnam Pro', 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif; }
+    .ee-page, .ee-page *:not(.fs-1) { font-size: 0.8rem !important; }
+
+    .exam-header {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px; padding: 24px;
+        margin-bottom: 25px;
+        box-shadow: 0 10px 30px rgba(15,23,42,.08);
+        animation: fadeIn 0.5s ease;
+    }
+    .exam-header .eh-meta { display: flex; flex-direction: column; gap: 6px; }
+    /* Các trường sửa thông tin đề thi — xếp dọc trong ô bên trái */
+    .eh-fields { display: flex; flex-direction: column; gap: 14px; }
+    .eh-field label { display: block; margin-bottom: 5px; color: #475569; font-weight: 600; }
+    .eh-field .form-control-dark, .eh-field select.eh-input { width: 100%; }
+    .eh-input {
+        width: 100%; padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 10px;
+        background: #f8fafc; color: #0f172a; outline: none; font-family: inherit;
+        transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+    }
+    .eh-input:focus { border-color: #2563eb; background: #fff; box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+    .eh-static { padding: 9px 12px; border: 1px dashed #e2e8f0; border-radius: 10px; background: #f8fafc; color: #64748b; font-weight: 700; }
+
+    /* Bố cục 3 cột: thông tin (trái) | câu hỏi (giữa) | nút thao tác (sát phải) */
+    .edit-layout { display: grid; grid-template-columns: 300px 1fr 190px; gap: 22px; align-items: start; }
+    .edit-side { position: sticky; top: 16px; }
+    .edit-side .exam-header { margin-bottom: 0; }
+    .edit-main { min-width: 0; }
+    .edit-actions { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .edit-actions .btn-save, .edit-actions .btn-cancel-link { width: 100%; justify-content: center; }
+    @media (max-width: 992px) {
+        .edit-layout { grid-template-columns: 1fr; }
+        .edit-side, .edit-actions { position: static; }
+        .edit-actions { flex-direction: row; justify-content: flex-end; }
+        .edit-actions .btn-save, .edit-actions .btn-cancel-link { width: auto; }
+    }
+    /* ĐIỆN THOẠI: nhãn (Câu N · Chương · Độ khó · Bloom) thu nhỏ để xuống dòng gọn */
+    @media (max-width: 768px) {
+        .q-card-header { padding: 10px 14px; gap: 6px; }
+        .q-num { font-size: 0.85rem; }
+        .q-card-header .badge-chuong,
+        .q-card-header .badge-de,
+        .q-card-header .badge-tb,
+        .q-card-header .badge-kho,
+        .q-card-header .badge-bloom { font-size: 0.75rem !important; padding: 3px 8px !important; }
+    }
+    
+    .q-card {
+        background: #ffffff;
+        border: 1px solid rgba(255,193,7,0.3); /* Viền màu vàng biểu thị chế độ Edit */
+        border-radius: 16px; margin-bottom: 20px;
+        overflow: hidden; transition: all 0.3s;
+        box-shadow: 0 5px 20px rgba(255,193,7,0.05);
+    }
+    .q-card-header {
+        padding: 14px 20px;
+        display: flex; justify-content: space-between;
+        align-items: center; flex-wrap: wrap; gap: 8px;
+        border-bottom: 1px solid #f1f5f9;
+        background: rgba(255,193,7,0.05);
+    }
+    .q-card-body { padding: 20px; }
+    
+    .q-num {
+        font-size: 0.95rem; font-weight: 700;
+        color: #d97706; text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    /* BADGES */
+    .bloom-badge { padding: 3px 10px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; display: inline-block; }
+    .bloom-nho { background: rgba(168,85,247,0.15); color: #a855f7; border: 1px solid rgba(168,85,247,0.3); }
+    .bloom-hieu { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); }
+    .bloom-van-dung { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+    .bloom-phan-tich { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+    .bloom-danh-gia { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .bloom-sang-tao { background: rgba(236,72,153,0.15); color: #ec4899; border: 1px solid rgba(236,72,153,0.3); }
+    
+    .badge-chuong { background: rgba(102,126,234,0.15); color: #2563eb; border: 1px solid rgba(102,126,234,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+    .badge-de  { background:rgba(56,239,125,0.15); color:#16a34a; border:1px solid rgba(56,239,125,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+    .badge-tb  { background:rgba(255,193,7,0.15); color:#d97706; border:1px solid rgba(255,193,7,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+    .badge-kho { background:rgba(255,107,107,0.15); color:#dc2626; border:1px solid rgba(255,107,107,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+
+    /* EDIT FORM */
+    .opt-edit-group { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .opt-badge { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
+    .opt-a { background:rgba(102,126,234,0.2); color:#2563eb; }
+    .opt-b { background:rgba(56,239,125,0.2);  color:#16a34a; }
+    .opt-c { background:rgba(255,193,7,0.2);   color:#d97706; }
+    .opt-d { background:rgba(255,107,107,0.2); color:#dc2626; }
+    
+    .answer-radio-group {
+        display: flex; align-items: center; gap: 20px;
+        background: rgba(56,239,125,0.05); border: 1px solid rgba(56,239,125,0.15);
+        border-radius: 12px; padding: 12px 20px; margin-top: 15px;
+    }
+    .radio-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .radio-item input { accent-color: #16a34a; width: 16px; height: 16px; }
+    .radio-item span { font-weight: 700; color: #0f172a; }
+
+    /* SAVE BAR */
+    .save-bar {
+        position: fixed; bottom: 0; left: 0; right: 0;
+        background: rgba(255,255,255,0.97); backdrop-filter: blur(20px);
+        border-top: 1px solid rgba(255,193,7,0.2);
+        padding: 15px 30px; display: flex; justify-content: space-between;
+        align-items: center; gap: 15px; z-index: 1050; flex-wrap: wrap;
+    }
+    .save-info { color: #64748b; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .save-info b { color: #0f172a; font-weight: 800; }
+    .save-actions { display: flex; align-items: center; gap: 15px; margin-left: auto; }
+    .btn-save {
+        background: #ffffff; border: 1px solid #d97706; color: #d97706;
+        padding: 12px 40px; font-weight: 700; border-radius: 12px; font-size: 1rem;
+        transition: all 0.3s; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    }
+    .btn-save:hover { background: #d97706; color: #ffffff; border-color: #d97706; transform: translateY(-2px); box-shadow: 0 10px 30px rgba(217,119,6,0.3); }
+    .btn-cancel-link {
+        background: #fef2f2; border: 1px solid #dc2626;
+        color: #dc2626; padding: 12px 25px; font-weight: 700; border-radius: 12px;
+        transition: all 0.3s; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-cancel-link:hover { background: #dc2626; border-color: #dc2626; color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4 ee-page" style="max-width:1240px; padding-bottom: 40px;">
+
+    <form action="/edit_exam/{{ exam.id }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="edit-layout">
+        <aside class="edit-side">
+        <div class="exam-header">
+            <h4 class="mb-3" style="color: #d97706;">
+                <i class="fas fa-edit me-2"></i>
+                {% if la_bo_cau_hoi %}Chỉnh sửa bộ câu hỏi{% else %}Chỉnh sửa đề thi{% endif %}
+            </h4>
+            <div class="eh-fields">
+                <div class="eh-field">
+                    <label><i class="fas fa-file-signature me-1"></i>
+                        {% if la_bo_cau_hoi %}Tên bộ câu hỏi{% else %}Tên đề thi{% endif %}</label>
+                    <input type="text" class="eh-input" name="ten_de_thi" value="{{ meta.ten }}" required>
+                </div>
+
+                {% if la_bo_cau_hoi %}
+                {# BỘ CÂU HỎI: chỉ có Tên + Học phần. Mã học phần TỰ cập nhật theo học phần
+                   đã chọn. Không có Mã đề / Hình thức / Học kỳ / Năm học — đó là thông tin
+                   của một ĐỀ THI, không phải của bộ câu hỏi. #}
+                <div class="eh-field">
+                    <label><i class="fas fa-book me-1"></i> Học phần</label>
+                    <select name="hoc_phan_id" id="hocPhanSelect" class="eh-input" required>
+                        {% for hp in hoc_phan_list %}
+                        <option value="{{ hp.id }}" data-ma="{{ hp.ma_hoc_phan or '' }}"
+                                {% if hp.id == exam.hoc_phan_id %}selected{% endif %}>{{ hp.ten_hoc_phan }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="eh-field">
+                    <label><i class="fas fa-barcode me-1"></i> Mã học phần</label>
+                    <div class="eh-static" id="maHocPhanView">—</div>
+                </div>
+
+                {% else %}
+                <div class="eh-field">
+                    <label><i class="fas fa-hashtag me-1"></i> Mã đề</label>
+                    <input type="text" class="eh-input" name="ma_de" value="{{ meta.ma_de }}">
+                </div>
+                <div class="eh-field">
+                    <label><i class="fas fa-book me-1"></i> Môn học</label>
+                    <div class="eh-static">{{ exam.ten_mon or '—' }}</div>
+                </div>
+                <div class="eh-field">
+                    <label><i class="fas fa-barcode me-1"></i> Mã học phần</label>
+                    <div class="eh-static">{{ meta.ma_hp or '—' }}</div>
+                </div>
+                <div class="eh-field">
+                    <label><i class="fas fa-clipboard-list me-1"></i> Hình thức</label>
+                    <select name="hinh_thuc" class="eh-input">
+                        <option value="">— Không —</option>
+                        {% for h in hinh_thuc_opts %}
+                        <option value="{{ h }}" {% if h == meta.hinh_thuc %}selected{% endif %}>{{ h }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="eh-field">
+                    <label><i class="fas fa-calendar-day me-1"></i> Học kỳ</label>
+                    <input type="text" class="eh-input" name="hoc_ky" value="{{ meta.hoc_ky }}" placeholder="VD: Học kỳ 1">
+                </div>
+                <div class="eh-field">
+                    <label><i class="fas fa-calendar-alt me-1"></i> Năm học</label>
+                    <input type="text" class="eh-input" name="nam_hoc" value="{{ meta.nam_hoc }}" placeholder="VD: 2024-2025">
+                </div>
+                {% endif %}
+
+                {% if not la_bo_cau_hoi %}
+                <div class="eh-field">
+                    <label><i class="fas fa-database me-1"></i> Nguồn</label>
+                    <div class="eh-static">
+                        {% if exam.nguon == 'ca_nhan' %}Cá nhân{% elif exam.nguon == 'ngan_hang' %}Ngân hàng{% else %}{{ exam.nguon or '—' }}{% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                <div class="eh-field">
+                    <label><i class="fas fa-list-ol me-1"></i> Số câu</label>
+                    <div class="eh-static">{{ exam.tong_so_cau }} câu</div>
+                </div>
+                <div class="eh-field">
+                    <label><i class="fas fa-clock me-1"></i> Ngày tạo</label>
+                    <div class="eh-static">{{ exam.ngay_tao.strftime('%H:%M %d/%m/%Y') if exam.ngay_tao else '—' }}</div>
+                </div>
+            </div>
+        </div>
+        </aside><!-- /edit-side -->
+
+        <main class="edit-main">
+        {% for q in questions %}
+        <div class="q-card">
+            <div class="q-card-header">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="q-num"><i class="fas fa-pen me-1"></i> Câu {{ loop.index }}</span>
+                    <span class="badge-chuong">Chương {{ q.chuong }}</span>
+
+                    {% if q.do_kho == 'Dễ' %} <span class="badge-de">Dễ</span>
+                    {% elif q.do_kho == 'Trung bình' %} <span class="badge-tb">Trung bình</span>
+                    {% else %} <span class="badge-kho">Khó</span> {% endif %}
+
+                    {% if q.bloom %}
+                        {% set bloom_val = q.bloom | lower %}
+                        {% if 'nhớ' in bloom_val or 'nho' in bloom_val %} <span class="bloom-badge bloom-nho">🧠 Nhớ</span>
+                        {% elif 'hiểu' in bloom_val or 'hieu' in bloom_val %} <span class="bloom-badge bloom-hieu">💡 Hiểu</span>
+                        {% elif 'vận dụng' in bloom_val or 'van dung' in bloom_val %} <span class="bloom-badge bloom-van-dung">⚙️ Vận dụng</span>
+                        {% elif 'phân tích' in bloom_val or 'phan tich' in bloom_val %} <span class="bloom-badge bloom-phan-tich">🔍 Phân tích</span>
+                        {% elif 'đánh giá' in bloom_val or 'danh gia' in bloom_val %} <span class="bloom-badge bloom-danh-gia">⚖️ Đánh giá</span>
+                        {% elif 'sáng tạo' in bloom_val or 'sang tao' in bloom_val %} <span class="bloom-badge bloom-sang-tao">✨ Sáng tạo</span>
+                        {% else %} <span class="bloom-badge bloom-nho">{{ q.bloom }}</span> {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="q-card-body">
+                <div class="mb-3">
+                    <label class="form-label-dark" style="color:#64748b;">Nội dung câu hỏi</label>
+                    <textarea class="form-control-dark" name="noi_dung_{{ q.id }}" rows="2" required>{{ q.noi_dung or q.cau_hoi }}</textarea>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <div class="opt-edit-group">
+                            <div class="opt-badge opt-a">A</div>
+                            <input type="text" class="form-control-dark" name="cau_a_{{ q.id }}" value="{{ q.cau_a }}" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="opt-edit-group">
+                            <div class="opt-badge opt-b">B</div>
+                            <input type="text" class="form-control-dark" name="cau_b_{{ q.id }}" value="{{ q.cau_b }}" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="opt-edit-group">
+                            <div class="opt-badge opt-c">C</div>
+                            <input type="text" class="form-control-dark" name="cau_c_{{ q.id }}" value="{{ q.cau_c }}" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="opt-edit-group">
+                            <div class="opt-badge opt-d">D</div>
+                            <input type="text" class="form-control-dark" name="cau_d_{{ q.id }}" value="{{ q.cau_d }}" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="answer-radio-group">
+                    <span class="mb-0" style="color:#16a34a; font-weight:600;"><i class="fas fa-check-circle me-1"></i>Đáp án đúng:</span>
+                    {% for opt in ['A','B','C','D'] %}
+                    <label class="radio-item">
+                        <input type="radio" name="dap_an_{{ q.id }}" value="{{ opt }}" {% if (q.dap_an_dung or '')|trim|upper == opt %}checked{% endif %}>
+                        <span>{{ opt }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        </main><!-- /edit-main -->
+
+        <aside class="edit-actions">
+            <button type="submit" class="btn-save">
+                <i class="fas fa-save"></i>
+                {% if la_bo_cau_hoi %}Cập nhật {% else %}Cập nhật đề thi{% endif %}
+            </button>
+            <a href="{% if la_bo_cau_hoi %}/?tab=library&sub=cauhoi{% else %}/?tab=library&sub=dethi{% endif %}" class="btn-cancel-link">
+                <i class="fas fa-times"></i> Hủy thay đổi
+            </a>
+        </aside>
+        </div><!-- /edit-layout -->
+    </form>
+</div>
+
+{% if la_bo_cau_hoi %}
+<script>
+// Mã học phần TỰ cập nhật theo học phần đang chọn (chỉ hiển thị — server lấy mã
+// từ chính hoc_phan_id được gửi lên, không tin giá trị hiển thị ở đây).
+(function () {
+    var sel  = document.getElementById('hocPhanSelect');
+    var view = document.getElementById('maHocPhanView');
+    if (!sel || !view) return;
+    function capNhatMa() {
+        var opt = sel.options[sel.selectedIndex];
+        view.textContent = (opt && opt.dataset.ma) ? opt.dataset.ma : '—';
+    }
+    sel.addEventListener('change', capNhatMa);
+    capNhatMa();   // hiển thị đúng ngay khi mở trang
+})();
+</script>
+{% endif %}
+{% endblock %}

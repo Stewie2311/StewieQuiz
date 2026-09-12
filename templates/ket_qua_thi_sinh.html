@@ -1,0 +1,258 @@
+{#
+  ket_qua_thi_sinh.html — ĐIỂM SỐ hiện ngay sau khi thí sinh nộp bài.
+
+  Phần chi tiết từng câu (đáp án đúng, đáp án đã chọn) CHỈ hiện khi giáo viên
+  bật `hien_thi_dap_an` cho phòng đó. Tắt đi thì thí sinh chỉ thấy điểm — để
+  người thi ca đầu không chụp màn hình đáp án gửi cho bạn thi ca sau.
+#}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kết quả thi - Khoa TT-TT</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {# Trang này KHÔNG kế thừa base.html nên phải tự nạp font Be Vietnam Pro. #}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/controls.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/square.css') }}">
+    <style>
+        body {
+            background: #f4f7fb; color: #0f172a; padding: 30px 0;
+            font-family: 'Be Vietnam Pro', 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+        }
+        body, button, input, select, textarea, .btn {
+            font-family: 'Be Vietnam Pro', 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+        }
+        .container-kq { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+
+        /* Thẻ điểm cố tình HẸP hơn phần "Chi tiết bài làm" bên dưới: nội dung
+           trong thẻ chỉ là vài con số, kéo rộng hết khung thì chữ nằm rời rạc
+           giữa một mảng trống lớn. */
+        .score-card {
+            max-width: 420px; margin: 0 auto 24px;
+            background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(240,147,251,0.08));
+            border: 1px solid rgba(102,126,234,0.25);
+            border-radius: 20px; padding: 26px 24px; text-align: center;
+        }
+        .score-big {
+            font-size: 3.25rem; font-weight: 800; line-height: 1;
+            background: linear-gradient(135deg, #0e7490, #16a34a);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .score-big.low {
+            background: linear-gradient(135deg, #dc2626, #7c3aed);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+
+        /* Số liệu xếp DỌC: mỗi dòng một chỉ số, nhãn trái - số phải. Đọc lướt
+           từ trên xuống nhanh hơn 3 ô nằm ngang cách xa nhau. */
+        .stat-list {
+            margin-top: 20px; text-align: left;
+            background: rgba(255,255,255,0.55);
+            border: 1px solid #e6ebf3; border-radius: 12px; overflow: hidden;
+        }
+        .stat-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 9px 14px;
+        }
+        .stat-item + .stat-item { border-top: 1px solid #eef2f9; }
+        .stat-item .l { font-size: 0.86rem; color: #64748b; }
+        .stat-item .v { font-size: 1.05rem; font-weight: 800; }
+
+        .exam-meta { margin-top: 16px; font-size: 0.78rem; color: #64748b; line-height: 1.5; }
+        .exam-meta .m-mon { display: block; font-weight: 600; color: #334155; font-size: 0.84rem; }
+
+        /* Dòng đếm ngược tự chuyển về trang chủ. */
+        .auto-back { margin-top: 18px; font-size: 0.82rem; color: #64748b; }
+        .auto-back #dem { font-weight: 700; color: #2563eb; }
+        .q-review {
+            background: #ffffff; border: 1px solid #e2e8f0;
+            border-left: 4px solid #64748b; border-radius: 12px; padding: 18px; margin-bottom: 12px;
+        }
+        .q-review.correct { border-left-color: #16a34a; }
+        .q-review.wrong { border-left-color: #dc2626; }
+        .q-review .q-text { font-weight: 600; margin-bottom: 14px; line-height: 1.5; }
+        .opt-line {
+            display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 8px 12px;
+            border-radius: 8px; margin-bottom: 0; font-size: 0.9rem; height: 100%;
+            background: #f8fafc; border: 1px solid #f1f5f9; color: #64748b;
+        }
+        .opt-line.dap-dung { background: rgba(56,239,125,0.08); border-color: rgba(56,239,125,0.3); color: #16a34a; }
+        .opt-line.chon-sai { background: rgba(255,107,107,0.08); border-color: rgba(255,107,107,0.3); color: #dc2626; }
+        .opt-letter-sm {
+            width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; font-weight: 700;
+            font-size: 0.8rem; background: #e2e8f0;
+        }
+        .tag { font-size: 0.72rem; padding: 2px 8px; border-radius: 6px; font-weight: 700; margin-left: auto; }
+
+        /* Nút về trang chủ nằm ở ĐẦU trang, chỉ còn icon ngôi nhà.
+           Đặt trên cùng vì phần "Chi tiết bài làm" bên dưới có thể dài hàng chục
+           câu — bắt học sinh cuộn hết xuống đáy mới thoát ra được là hành họ. */
+        .kq-topbar { margin-bottom: 16px; }
+        .btn-home {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8); border: none; color: #fff;
+            width: 44px; height: 44px; padding: 0; border-radius: 12px; text-decoration: none;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 1.05rem; transition: transform .2s, box-shadow .2s;
+        }
+        .btn-home:hover {
+            color: #fff; transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(37,99,235,.35);
+        }
+
+        /* ===== TỐI ƯU MÀN HÌNH ĐIỆN THOẠI ===== */
+        @media (max-width: 576px) {
+            body { padding: 18px 0; }
+            .score-card { padding: 22px 16px; border-radius: 16px; }
+            .score-big { font-size: 2.75rem; }
+            .stat-item { padding: 8px 12px; }
+            .stat-item .v { font-size: 1rem; }
+            .q-review { padding: 14px; }
+            .q-review .q-text { font-size: 0.95rem; }
+            .opt-line { font-size: 0.86rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-kq">
+        {# Nút về trang chủ: để NGOÀI khối {% if thi_sinh %} để cả khi không tìm
+           thấy kết quả, học sinh vẫn có đường thoát ra. #}
+        <div class="kq-topbar">
+            <a href="/" class="btn-home" id="btnHome" title="Về trang chủ" aria-label="Về trang chủ">
+                <i class="fas fa-house"></i>
+            </a>
+        </div>
+
+        {% if not thi_sinh %}
+            <div class="score-card"><h4>Không tìm thấy kết quả!</h4></div>
+        {% else %}
+        <div class="score-card">
+            <p class="text-muted mb-1">Kết quả bài thi của</p>
+            <h4 class="fw-bold mb-3">{{ thi_sinh.ho_ten }}</h4>
+            {% set diem = thi_sinh.diem if thi_sinh.diem is not none else 0 %}
+            <div class="score-big {% if diem < 5 %}low{% endif %}">{{ '%.2f'|format(diem) }}</div>
+            <p class="text-muted mt-2 mb-0">điểm / {{ '%g'|format(thi_sinh.tong_diem|float) if thi_sinh.tong_diem else 10 }}</p>
+
+            <div class="stat-list">
+                <div class="stat-item">
+                    <span class="l">Câu đúng</span>
+                    <span class="v" style="color:#16a34a;">{{ thi_sinh.so_cau_dung or 0 }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="l">Câu sai</span>
+                    <span class="v" style="color:#dc2626;">{{ (thi_sinh.tong_so_cau or 0) - (thi_sinh.so_cau_dung or 0) }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="l">Tổng câu</span>
+                    <span class="v" style="color:#2563eb;">{{ thi_sinh.tong_so_cau or 0 }}</span>
+                </div>
+            </div>
+
+            {# Tên đề được nhét sẵn thông tin hành chính vào trong ngoặc, kiểu:
+               "Đề thi ktmt (Giữa kỳ · 1 · 2025-2026 · Mã môn G06009) - Mã đề A02"
+               In nguyên si thì dài lê thê và tràn hai dòng. Ở đây bóc lấy hai
+               thứ người thi thật sự cần: HÌNH THỨC THI và MÃ ĐỀ. #}
+            {% set _td = thi_sinh.ten_de_thi or '' %}
+            {% set _hinh_thuc = _td.split('(')[1].split('·')[0].strip() if '(' in _td else '' %}
+            {% set _ma_de = _td.split('Mã đề')[-1].strip() if 'Mã đề' in _td else '' %}
+            <p class="exam-meta mb-0">
+                <span class="m-mon"><i class="fas fa-book me-1"></i>{{ thi_sinh.ten_mon }}</span>
+                {% if _ma_de %}Mã đề {{ _ma_de }}{% endif %}
+                {% if _ma_de and _hinh_thuc %} &middot; {% endif %}
+                {% if _hinh_thuc %}{{ _hinh_thuc }}{% endif %}
+            </p>
+        </div>
+
+        {% if bai_lam_detail %}
+        <h5 class="fw-bold mb-3"><i class="fas fa-list-check me-2" style="color:#2563eb;"></i>Chi tiết bài làm</h5>
+        {% for bl in bai_lam_detail %}
+        <div class="q-review {% if bl.is_correct %}correct{% else %}wrong{% endif %}">
+            <div class="q-text">
+                Câu {{ loop.index }}: {{ bl.noi_dung }}
+                {% if bl.is_correct %}
+                    <span class="tag" style="background:rgba(56,239,125,0.15);color:#16a34a;">✓ Đúng</span>
+                {% else %}
+                    <span class="tag" style="background:rgba(255,107,107,0.15);color:#dc2626;">✗ Sai</span>
+                {% endif %}
+            </div>
+            {% set _ml = [bl.cau_a|default('')|length, bl.cau_b|default('')|length, bl.cau_c|default('')|length, bl.cau_d|default('')|length]|max %}
+            {% if _ml <= 30 %}{% set _col = 'col-6 col-md-3' %}{% elif _ml <= 80 %}{% set _col = 'col-12 col-sm-6' %}{% else %}{% set _col = 'col-12' %}{% endif %}
+            <div class="row g-2">
+            {% for opt, val in [('A', bl.cau_a), ('B', bl.cau_b), ('C', bl.cau_c), ('D', bl.cau_d)] %}
+            <div class="{{ _col }}">
+            <div class="opt-line{%- if opt == bl.dap_an_dung %} dap-dung{%- elif opt == bl.dap_an_chon and not bl.is_correct %} chon-sai{% endif %}">
+                <div class="opt-letter-sm">{{ opt }}</div>
+                <div style="flex:1 1 0; min-width:0;">{{ val }}</div>
+                {% if opt == bl.dap_an_dung %}<span class="tag" style="color:#16c054;">Đúng</span>
+                {% elif opt == bl.dap_an_chon %}<span class="tag" style="color:#961717;">Sai</span>{% endif %}
+            </div>
+            </div>
+            {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="text-center text-muted py-4">
+            <i class="fas fa-lock me-1"></i>Giáo viên không công khai đáp án chi tiết cho phòng thi này.
+        </div>
+        {% endif %}
+
+        {# Chỉ đếm ngược cho học sinh ĐÃ ĐĂNG NHẬP. Khách vãng lai vào thi bằng
+           link thì "/" lại đá họ sang trang đăng nhập — tự động ném họ tới đó là
+           vô duyên, cứ để họ tự bấm. #}
+        {% if session.user_id %}
+        <div class="text-center mt-4">
+            <p class="auto-back mb-0" id="autoBack">
+                Tự về trang chủ sau <span id="dem">5</span> giây…
+            </p>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% include 'components/footer.html' %}
+
+    {% if thi_sinh and session.user_id %}
+    <script>
+    /* Đếm ngược rồi tự chuyển về trang chủ.
+
+       HỦY đếm ngược ngay khi học sinh có bất kỳ thao tác nào (cuộn trang, bấm
+       chuột, gõ phím). Lý do: bên dưới còn phần "Chi tiết bài làm" — đang đọc
+       xem mình sai câu nào mà trang tự nhảy đi thì rất ức chế. Ai không đụng gì
+       tức là đã xem xong, cho về trang chủ. */
+    (function () {
+        var GIAY = 5;
+        var oDem   = document.getElementById('dem');
+        var oThongBao = document.getElementById('autoBack');
+        var conLai = GIAY;
+        var boDem  = null;
+
+        function huy() {
+            if (boDem) { clearInterval(boDem); boDem = null; }
+            if (oThongBao) { oThongBao.style.display = 'none'; }
+            ['scroll', 'mousedown', 'keydown', 'touchstart', 'wheel'].forEach(function (sk) {
+                window.removeEventListener(sk, huy);
+            });
+        }
+
+        boDem = setInterval(function () {
+            conLai -= 1;
+            if (oDem) { oDem.textContent = conLai; }
+            if (conLai <= 0) {
+                clearInterval(boDem);
+                window.location.href = '/';
+            }
+        }, 1000);
+
+        ['scroll', 'mousedown', 'keydown', 'touchstart', 'wheel'].forEach(function (sk) {
+            window.addEventListener(sk, huy, { passive: true });
+        });
+    })();
+    </script>
+    {% endif %}
+</body>
+</html>

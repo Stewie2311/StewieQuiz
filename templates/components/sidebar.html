@@ -1,0 +1,50 @@
+<aside class="sidebar">
+    <div class="sidebar-inner">
+        <div class="sidebar-header">
+            <h3>Menu</h3>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="#" class="sidebar-item" data-tab="dashboard">
+                <i class="fas fa-chart-pie"></i>
+                <span>Tổng quan</span>
+            </a>
+            
+            <a href="#" class="sidebar-item active" data-tab="exam">
+                <i class="fas fa-robot"></i>
+                <span>Tạo đề AI</span>
+            </a>
+            
+            <a href="#" class="sidebar-item" data-tab="library">
+                <i class="fas fa-book-open"></i>
+                <span>Thư viện đề</span>
+            </a>
+            
+            <a href="#" class="sidebar-item" data-tab="room">
+                <i class="fas fa-door-open"></i>
+                <span>Phòng thi</span>
+            </a>
+            
+            <a href="#" class="sidebar-item" data-tab="bank">
+                <i class="fas fa-database"></i>
+                <span>Ngân hàng</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="sidebar-user">
+                <div class="user-avatar">{{ session.get('ho_ten', 'User')[0] | upper }}</div>
+                <div class="user-info">
+                    <p class="user-name">{{ session.get('ho_ten', 'User') }}</p>
+                    <p class="user-role">
+                        {% if session.get('role') == 'admin' %}
+                            <span class="badge badge-admin">Admin</span>
+                        {% else %}
+                            <span class="badge badge-teacher">Giáo viên</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</aside>

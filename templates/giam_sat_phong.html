@@ -1,0 +1,435 @@
+{#
+  giam_sat_phong.html — MÀN HÌNH COI THI TRỰC TIẾP.
+
+  Bên trái là thông tin phòng và số liệu; bên phải là lưới webcam của thí sinh.
+
+  Hình webcam đi qua Socket.IO và KHÔNG được lưu ở đâu cả: máy thí sinh gửi ảnh
+  -> server chuyển thẳng cho giáo viên -> bỏ. Không có ảnh nào nằm lại trên đĩa
+  hay trong cơ sở dữ liệu (xem routes/realtime.py).
+
+  Trang này tráo qua lại với quan_ly_phong.html mà không tải lại (room-nav.js).
+  Vì thế khi rời trang phải NGẮT kết nối Socket.IO và dừng bộ đếm giờ — không
+  thì mỗi lần tráo qua tráo lại là dựng thêm một kết nối mới, và sau vài lần
+  trình duyệt sẽ ì ra.
+#}
+{% extends layout|default("base.html") %}
+{% block title %}Giám sát phòng thi - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<!-- Socket.IO nạp ở <head> để sẵn sàng trước khi view chạy (kể cả khi tráo AJAX) -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+{% endblock %}
+{% block content %}
+<div id="roomHost">
+<style>
+    /* Font giống trang Đăng nhập/Quản lý phòng (Be Vietnam Pro) */
+    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
+    .gs-page { font-family: 'Be Vietnam Pro', 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif; }
+    /* Đồng nhất cỡ chữ toàn trang về 0.8rem (giữ icon lớn .fs-1) */
+    .gs-page, .gs-page *:not(.fs-1) { font-size: 0.8rem !important; }
+
+    /* ===== Bố cục ngang: thông tin bên trái, camera bên phải ===== */
+    .gs-layout {
+        display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start;
+    }
+    .gs-side { position: sticky; top: 16px; }
+    .gs-main { min-width: 0; }
+    @media (max-width: 992px) {
+        .gs-layout { grid-template-columns: 1fr; }
+        .gs-side { position: static; }
+    }
+
+    /* ===== Khối thông tin phòng (giống trang Quản lý phòng) ===== */
+    .room-info-card {
+        background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px;
+        padding: 14px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    .ri-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-width: 0; }
+    .ri-head i { color: #2563eb; }
+    .ri-head .lbl { color: #64748b; font-weight: 600; }
+    .ri-head .val { color: #0f172a; font-weight: 800; }
+    .ri-grid {
+        display: grid; grid-template-columns: 1fr; gap: 1px;
+        background: #e2e8f0; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;
+    }
+    .ri-cell {
+        background: #ffffff; padding: 10px 14px; min-height: 52px;
+        display: flex; flex-direction: column; justify-content: center; gap: 4px;
+        transition: background 0.18s ease;
+    }
+    .ri-cell:hover { background: #f8fafc; }
+    .ri-label {
+        color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+        display: flex; align-items: center; gap: 5px;
+    }
+    .ri-label i { color: #94a3b8; }
+    .ri-value {
+        color: #0f172a; font-weight: 700;
+        display: flex; align-items: center; flex-wrap: wrap; gap: 5px; line-height: 1.3;
+    }
+    .ri-value-code { display: flex; align-items: center; gap: 8px; }
+    .ri-tag {
+        display: inline-block; background: #f1f5f9; color: #0f172a;
+        border: 1px solid #e2e8f0; border-radius: 6px !important; padding: 1px 7px; font-weight: 700;
+    }
+    .ri-copy-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 28px; height: 28px; flex-shrink: 0; background: #ffffff; color: #2563eb;
+        border: 1px solid #bfdbfe; border-radius: 8px !important; cursor: pointer; transition: all 0.15s ease;
+    }
+    .ri-copy-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .ri-copy-btn.copied { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+    /* ===== Hộp thống kê trực tiếp (bên trái, dưới thông tin) ===== */
+    .gs-livebox {
+        margin-top: 14px; background: #ffffff; border: 1px solid #e2e8f0;
+        border-radius: 14px; padding: 14px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    .gs-live-title {
+        display: flex; align-items: center; gap: 7px; font-weight: 700; color: #0f172a; margin-bottom: 10px;
+    }
+    .gs-live-title .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e;
+        box-shadow: 0 0 0 3px rgba(34,197,94,.2); animation: gsPulse 1.6s ease-in-out infinite; }
+    @keyframes gsPulse { 50% { box-shadow: 0 0 0 6px rgba(34,197,94,0); } }
+    .gs-live-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .gs-live-stats .s {
+        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 6px; text-align: center;
+    }
+    .gs-live-stats .v { font-weight: 800; color: #0f172a; line-height: 1.1; }
+    .gs-live-stats .l { color: #64748b; margin-top: 2px; }
+
+    .gs-main-head { margin-bottom: 14px; }
+    .gs-main-head h4 { font-weight: 800; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 8px; }
+    .gs-main-head p  { color: #64748b; margin: 4px 0 0; }
+
+    /* ===== Lưới camera: 5 ô / hàng, tự xuống dòng ===== */
+    .gs-grid {
+        display: grid; grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+    }
+    @media (max-width: 1200px) { .gs-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 992px)  { .gs-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 640px)  { .gs-grid { grid-template-columns: repeat(2, 1fr); } }
+    .gs-card {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+        overflow: hidden; box-shadow: 0 2px 10px rgba(15,23,42,.05);
+    }
+    .gs-cam {
+        position: relative; width: 100%; aspect-ratio: 4/3; background: #0f172a;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .gs-cam img { width: 100%; height: 100%; object-fit: cover; }
+    .gs-cam .offline {
+        color: #64748b; font-size: .8rem; text-align: center; padding: 10px;
+    }
+    .gs-dot {
+        position: absolute; top: 8px; left: 8px; width: 10px; height: 10px;
+        border-radius: 50%; box-shadow: 0 0 0 3px rgba(255,255,255,.5);
+    }
+    .gs-dot.on  { background: #16a34a; }
+    .gs-dot.off { background: #94a3b8; }
+    .gs-badge {
+        position: absolute; top: 8px; right: 8px; padding: 2px 8px; border-radius: 6px;
+        font-size: .68rem; font-weight: 800; color: #fff;
+    }
+    .gs-badge.nop  { background: #16a34a; }
+    .gs-badge.canh { background: #dc2626; }
+    .gs-info { padding: 10px 12px; }
+    .gs-info .ten { font-weight: 700; color: #0f172a; font-size: .9rem;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gs-info .mssv { color: #64748b; font-size: .76rem; }
+    .gs-flag {
+        margin-top: 6px; font-size: .74rem; font-weight: 700;
+        display: inline-flex; align-items: center; gap: 5px;
+    }
+    .gs-flag.ok   { color: #16a34a; }
+    .gs-flag.warn { color: #dc2626; }
+    .gs-empty {
+        text-align: center; padding: 60px 20px; color: #64748b;
+        background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 16px;
+    }
+
+    /* Tab chuyển Cài đặt phòng <-> Giám sát — kiểu tab nhỏ nền trắng bo viền */
+    .rp-nav-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+    .rp-nav-tab {
+        display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+        padding: 10px 20px; font-weight: 600; color: var(--text-muted);
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 10px !important;
+        transition: color .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .rp-nav-tab:hover { color: var(--primary-dark); background: var(--primary-softer); }
+    .rp-nav-tab.active { color: var(--primary-dark); background: var(--primary-soft); border-color: rgba(37,99,235,0.3); }
+
+    /* Chuyển trang mượt (Cài đặt phòng <-> Giám sát) */
+    @keyframes pageFadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: none; }
+    }
+    .gs-page { animation: pageFadeIn 0.32s ease; }
+    body.page-leaving .gs-page {
+        opacity: 0;
+        transform: translateY(-8px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+</style>
+<div class="container py-4 gs-page room-container" style="max-width: 1440px;">
+    <!-- Chuyển qua lại Cài đặt phòng / Giám sát -->
+    <div class="rp-nav-tabs">
+        <a href="{{ url_for('phong_thi.quan_ly_phong', phong_id=phong.id) }}" class="rp-nav-tab">
+            <i class="fas fa-gear me-2"></i> Cài đặt phòng
+        </a>
+        <a href="{{ url_for('phong_thi.giam_sat_phong', phong_id=phong.id) }}" class="rp-nav-tab active">
+            <i class="fas fa-video me-2"></i> Giám sát
+        </a>
+    </div>
+
+    <div class="gs-layout">
+        <!-- BÊN TRÁI: bảng thông tin + thống kê trực tiếp -->
+        <aside class="gs-side">
+            <div class="room-info-card">
+                <div class="ri-head">
+                    <i class="fas fa-file-alt"></i>
+                    <span class="lbl">Đề thi:</span>
+                    <span class="val">{{ phong.ten_mon }}</span>
+                </div>
+                <div class="ri-grid">
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-hashtag"></i> Mã phòng</div>
+                        <div class="ri-value ri-value-code">
+                            <span id="maPhongText">{{ phong.ma_phong }}</span>
+                            <button type="button" class="ri-copy-btn" title="Copy mã phòng"
+                                    onclick="copyText('{{ phong.ma_phong }}', this)">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-lock"></i> Mật khẩu</div>
+                        <div class="ri-value">{{ phong.mat_khau if phong.mat_khau else 'Không có' }}</div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-door-open"></i> Giờ mở phòng</div>
+                        <div class="ri-value">{{ phong.thoi_gian_mo_phong }}</div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-play-circle"></i> Giờ bắt đầu thi</div>
+                        <div class="ri-value">{{ phong.thoi_gian_bat_dau }}</div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-hourglass-half"></i> Thời lượng</div>
+                        <div class="ri-value">{{ phong.thoi_luong_lam_bai }} phút</div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-list-ol"></i> Số câu hỏi</div>
+                        <div class="ri-value">{{ phong.tong_so_cau }} câu</div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-file-alt"></i> Mã đề</div>
+                        <div class="ri-value">
+                            {% for d in bo_de %}<span class="ri-tag">{{ d.ma_de }}</span>{% endfor %}
+                            {% if bo_de and bo_de|length > 1 %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-school"></i> Lớp dự thi</div>
+                        <div class="ri-value">
+                            {% if lop_da_gan %}
+                                {% for l in lop_da_gan %}<span class="ri-tag">{{ l.ten_lop }}</span>{% endfor %}
+                            {% else %}
+                                <span class="text-muted">Chưa gán lớp</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="gs-livebox">
+                <div class="gs-live-title"><span class="dot"></span> Trực tiếp (realtime)</div>
+                <div class="gs-live-stats">
+                    <div class="s"><div class="v" id="stOnline">0</div><div class="l">Đang thi</div></div>
+                    <div class="s"><div class="v" id="stWarn">0</div><div class="l">Cảnh báo</div></div>
+                    <div class="s"><div class="v" id="stNop">0</div><div class="l">Đã nộp</div></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- BÊN PHẢI: lưới camera 5 ô / hàng -->
+        <main class="gs-main">
+            <div class="gs-main-head">
+                <h4><i class="fas fa-video" style="color:#2563eb;"></i> Giám sát trực tiếp</h4>
+            </div>
+            <div class="gs-grid" id="gsGrid"></div>
+            <div class="gs-empty" id="gsEmpty" style="display:none;">
+                <i class="fas fa-user-clock fs-1 mb-3 d-block opacity-50"></i>
+                Chưa có thí sinh nào được duyệt vào thi.
+            </div>
+        </main>
+    </div>
+</div>
+<script>
+// ----- Copy mã phòng -----
+function _fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+}
+function copyText(text, btn) {
+    function done() {
+        if (!btn) return;
+        btn.classList.add('copied');
+        const ic = btn.querySelector('i');
+        const old = ic ? ic.className : null;
+        if (ic) ic.className = 'fas fa-check';
+        setTimeout(function() { btn.classList.remove('copied'); if (ic && old) ic.className = old; }, 1400);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function() { _fallbackCopy(text); done(); });
+    } else { _fallbackCopy(text); done(); }
+}
+
+var PHONG_ID = {{ phong.id }};
+var socket   = io();
+var frames   = {};   // ts_id -> thời điểm (ms) nhận khung hình gần nhất
+var lastImg  = {};   // ts_id -> khung hình mới nhất (áp lại khi ô được tạo sau)
+var dsHienTai = [];
+
+socket.on('connect', () => socket.emit('gv_join', { phong_id: PHONG_ID }));
+
+// Nhận khung hình trực tiếp từ thí sinh -> đổ vào đúng ô của thí sinh đó
+socket.on('frame', (d) => {
+    if (!d || d.ts_id == null) return;
+    frames[d.ts_id]  = Date.now();
+    lastImg[d.ts_id] = d.image;   // giữ khung hình mới nhất kể cả khi ô chưa tạo
+    const img = document.getElementById('img_' + d.ts_id);
+    const off = document.getElementById('off_' + d.ts_id);
+    const dot = document.getElementById('dot_' + d.ts_id);
+    const ts  = dsHienTai.find(x => String(x.id) === String(d.ts_id));
+    if (ts && ts.da_nop_bai) return;          // đã nộp thì không hiện hình nữa
+    if (img) { img.src = d.image; img.style.display = 'block'; }
+    if (off) off.style.display = 'none';
+    if (dot) { dot.classList.add('on'); dot.classList.remove('off'); }
+});
+
+function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : s;
+    return d.innerHTML;
+}
+function online(id) { return frames[id] && (Date.now() - frames[id] < 8000); }
+
+// Tạo ô 1 thí sinh (chỉ 1 lần). Khung hình do socket cập nhật vào <img>.
+function taoCard(ts) {
+    const el = document.createElement('div');
+    el.className = 'gs-card'; el.id = 'card_' + ts.id; el.dataset.id = ts.id;
+    el.innerHTML = `
+        <div class="gs-cam">
+            <span class="gs-dot off" id="dot_${ts.id}"></span>
+            <span class="gs-badge" id="badge_${ts.id}" style="display:none;"></span>
+            <img id="img_${ts.id}" alt="cam" style="display:none;">
+            <div class="offline" id="off_${ts.id}"><i class="fas fa-hourglass-half mb-1 d-block"></i>Đang chờ hình…</div>
+        </div>
+        <div class="gs-info">
+            <div class="ten">${escapeHtml(ts.ho_ten)}</div>
+            <div class="mssv">${escapeHtml(ts.ma_so_sv) || '—'}</div>
+            <div class="gs-flag" id="flag_${ts.id}"></div>
+        </div>`;
+    // Nếu đã có khung hình đến trước lúc tạo ô -> hiển thị ngay, không chờ khung kế.
+    if (lastImg[ts.id] && !ts.da_nop_bai) {
+        const im = el.querySelector('#img_' + ts.id);
+        const of = el.querySelector('#off_' + ts.id);
+        const dt = el.querySelector('#dot_' + ts.id);
+        if (im) { im.src = lastImg[ts.id]; im.style.display = 'block'; }
+        if (of) of.style.display = 'none';
+        if (dt) { dt.classList.add('on'); dt.classList.remove('off'); }
+    }
+    return el;
+}
+
+function capNhatInfo(ts) {
+    const badge = document.getElementById('badge_' + ts.id);
+    const flag  = document.getElementById('flag_' + ts.id);
+    const off   = document.getElementById('off_' + ts.id);
+    const img   = document.getElementById('img_' + ts.id);
+    if (ts.da_nop_bai) {
+        badge.style.display = 'block'; badge.className = 'gs-badge nop'; badge.textContent = 'ĐÃ NỘP';
+        if (img) img.style.display = 'none';
+        if (off) { off.style.display = ''; off.innerHTML = '<i class="fas fa-circle-check mb-1 d-block"></i>Đã nộp bài'; }
+    } else if (ts.so_lan_roi > 0) {
+        badge.style.display = 'block'; badge.className = 'gs-badge canh'; badge.textContent = 'RỜI TAB ' + ts.so_lan_roi;
+    } else {
+        badge.style.display = 'none';
+    }
+    flag.className = ts.so_lan_roi > 0 ? 'gs-flag warn' : 'gs-flag ok';
+    flag.innerHTML = ts.so_lan_roi > 0
+        ? `<i class="fas fa-triangle-exclamation"></i>Rời màn hình ${ts.so_lan_roi} lần`
+        : `<i class="fas fa-circle-check"></i>Bình thường`;
+}
+
+// Lấy DANH SÁCH + trạng thái (poll nhẹ). Hình ảnh đến qua socket.
+async function capNhat() {
+    try {
+        const res = await fetch(`/giam_sat_phong/${PHONG_ID}/data`, {cache: 'no-store'});
+        const data = await res.json();
+        if (!data.ok) return;
+        dsHienTai = data.thi_sinhs || [];
+        const grid  = document.getElementById('gsGrid');
+        const empty = document.getElementById('gsEmpty');
+        const ids   = new Set(dsHienTai.map(t => String(t.id)));
+
+        Array.from(grid.children).forEach(ch => { if (!ids.has(ch.dataset.id)) grid.removeChild(ch); });
+        dsHienTai.forEach(ts => {
+            if (!document.getElementById('card_' + ts.id)) grid.appendChild(taoCard(ts));
+            capNhatInfo(ts);
+        });
+        empty.style.display = dsHienTai.length ? 'none' : 'block';
+        capNhatStats();
+    } catch (e) { /* bỏ qua lỗi mạng tạm thời */ }
+}
+
+function capNhatStats() {
+    let on = 0, warn = 0, nop = 0;
+    dsHienTai.forEach(ts => {
+        if (ts.da_nop_bai) nop++;
+        else if (online(ts.id)) on++;
+        if (ts.so_lan_roi > 0) warn++;
+    });
+    document.getElementById('stOnline').textContent = on;
+    document.getElementById('stWarn').textContent   = warn;
+    document.getElementById('stNop').textContent    = nop;
+}
+
+// Đánh dấu mất kết nối nếu quá lâu không nhận khung hình
+function quetOffline() {
+    dsHienTai.forEach(ts => {
+        if (ts.da_nop_bai || online(ts.id)) return;
+        const dot = document.getElementById('dot_' + ts.id);
+        const img = document.getElementById('img_' + ts.id);
+        const off = document.getElementById('off_' + ts.id);
+        if (dot) { dot.classList.add('off'); dot.classList.remove('on'); }
+        if (img) img.style.display = 'none';
+        if (off && off.style.display === 'none') {
+            off.style.display = '';
+            off.innerHTML = '<i class="fas fa-video-slash mb-1 d-block"></i>Camera tắt / mất kết nối';
+        }
+    });
+    capNhatStats();
+}
+
+capNhat();
+var __gsT1 = setInterval(capNhat, 4000);
+var __gsT2 = setInterval(quetOffline, 3000);
+// Dọn dẹp khi tráo sang tab Cài đặt phòng: dừng poll + ngắt Socket.IO.
+window.__roomCleanup = function () {
+    clearInterval(__gsT1); clearInterval(__gsT2);
+    try { socket.disconnect(); } catch (e) {}
+};
+</script>
+</div><!-- /roomHost -->
+{% endblock %}
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/room-nav.js') }}"></script>
+{% endblock %}

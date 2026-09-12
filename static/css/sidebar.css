@@ -1,0 +1,140 @@
+/* =====================================================================
+   sidebar.css — Menu dọc bên trái.
+
+   Trên điện thoại nó bị ẩn đi, chỉ trượt ra khi bấm nút menu (lớp .active do
+   initMobileMenu() trong main.js thêm vào).
+   ===================================================================== */
+
+.sidebar {
+    width: 260px;
+    background: linear-gradient(180deg, #0d0d1f 0%, #1a0a2e 100%);
+    border-right: 1px solid var(--border);
+    position: sticky;
+    top: 65px;
+    height: calc(100vh - 65px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+}
+
+.sidebar-header {
+    padding: 25px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.sidebar-header h3 {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 15px 10px;
+}
+
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+    cursor: pointer;
+    margin-bottom: 5px;
+}
+
+.sidebar-item:hover,
+.sidebar-item.active {
+    background: rgba(102, 126, 234, 0.15);
+    color: #a78bfa;
+}
+
+.sidebar-item i {
+    width: 18px;
+    text-align: center;
+}
+
+.sidebar-footer {
+    padding: 20px 15px;
+    border-top: 1px solid var(--border);
+}
+
+.sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #f093fb);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: white;
+    flex-shrink: 0;
+}
+
+.user-info {
+    flex: 1;
+}
+
+.user-name {
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    line-height: 1;
+    margin-bottom: 3px;
+}
+
+.user-role {
+    font-size: 0.75rem;
+    margin: 0;
+}
+
+.badge-admin {
+    background: rgba(240, 147, 251, 0.2);
+    color: #f093fb;
+}
+
+.badge-teacher {
+    background: rgba(102, 126, 234, 0.2);
+    color: #a78bfa;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+    .sidebar {
+        display: none;
+        position: fixed;
+        top: 65px;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        max-width: 260px;
+        z-index: 998;
+    }
+
+    .sidebar.active {
+        display: flex;
+    }
+}

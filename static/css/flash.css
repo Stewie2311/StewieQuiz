@@ -1,0 +1,91 @@
+/* =====================================================================
+   flash.css — Thông báo nổi (toast) và trạng thái ô nhập sai.
+
+   Đi cùng flash.js (dựng toast) và form-validate.js (gắn lớp .field-invalid
+   vào ô nhập chưa hợp lệ).
+   ===================================================================== */
+
+/* Ô bắt buộc còn trống / nhập sai khi bấm gửi form (dùng toàn hệ thống) */
+.field-invalid {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, .18) !important;
+}
+
+/* ==========================================================
+   THÔNG BÁO (TOAST) — góc trên bên phải, tự tắt sau 5 giây
+   ========================================================== */
+.flash-container {
+    position: fixed;
+    top: 84px;
+    right: 20px;
+    z-index: 1080;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 360px;
+    max-width: calc(100vw - 40px);
+    pointer-events: none;
+}
+
+.flash-toast {
+    pointer-events: auto;
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #1e293b;
+    font-size: 14px;
+    line-height: 1.5;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, .16);
+    border-left: 4px solid var(--toast-accent, #2563eb);
+    overflow: hidden;
+    transform: translateX(120%);
+    opacity: 0;
+    transition: transform .35s cubic-bezier(.22,1,.36,1), opacity .35s ease;
+}
+
+.flash-toast.show   { transform: translateX(0); opacity: 1; }
+.flash-toast.hide   { transform: translateX(120%); opacity: 0; }
+
+.flash-toast .flash-icon {
+    flex: 0 0 auto;
+    width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--toast-accent, #2563eb);
+    font-size: 13px;
+}
+
+.flash-toast .flash-body   { flex: 1 1 auto; padding-top: 2px; }
+.flash-toast .flash-close  {
+    flex: 0 0 auto; background: none; border: none; cursor: pointer;
+    color: #94a3b8; font-size: 16px; line-height: 1; padding: 2px;
+    transition: color .15s;
+}
+.flash-toast .flash-close:hover { color: #475569; }
+
+/* Thanh tiến trình đếm ngược trước khi toast tự tắt */
+.flash-toast .flash-progress {
+    position: absolute;
+    left: 0; bottom: 0; height: 3px;
+    width: 100%;
+    background: var(--toast-accent, #2563eb);
+    opacity: .55;
+    transform-origin: left center;
+    animation: flashCountdown 5s linear forwards;
+}
+@keyframes flashCountdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* Màu theo loại thông báo (map từ category của Flask) */
+.flash-toast.flash-success { --toast-accent: #16a34a; }
+.flash-toast.flash-danger  { --toast-accent: #dc2626; }
+.flash-toast.flash-warning { --toast-accent: #d97706; }
+.flash-toast.flash-info    { --toast-accent: #2563eb; }
+
+@media (max-width: 576px) {
+    .flash-container { top: 72px; right: 12px; left: 12px; width: auto; }
+}

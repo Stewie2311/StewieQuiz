@@ -1,0 +1,1194 @@
+{#
+  admin.html — TRANG QUẢN TRỊ (chỉ admin). Ba tab:
+
+    Thống kê   — dashboard: ô số liệu, biểu đồ, hoạt động gần đây, cảnh báo.
+    Người dùng — khóa/mở khóa, đổi vai trò, xóa tài khoản.
+    Prompt AI  — sửa system prompt dùng để sinh câu hỏi.
+
+  Tab Thống kê nạp số liệu bằng AJAX SAU KHI trang đã hiện, gọi 4 endpoint riêng
+  (/admin/dashboard/stats, /charts, /recent-activities, /alerts). Tách nhỏ như
+  vậy để một truy vấn chậm chỉ làm chậm đúng khối của nó, thay vì treo cả trang
+  quản trị.
+#}
+{% extends "base.html" %}
+{% block title %}Quản trị hệ thống - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Font giống trang Đăng nhập + cỡ chữ 0.8rem cho mọi bảng trong trang Quản trị */
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
+.adm-table, .adm-table * {
+    font-family: 'Be Vietnam Pro', 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif;
+    font-size: 0.8rem !important;
+}
+
+/* Giữ NGUYÊN nền dải màu (gradient) của layout như các trang khác — không ghi đè. */
+
+/* ══ Layout ══ */
+/* Trang Quản trị TRÀN gần hết bề ngang màn hình (bỏ giới hạn bề rộng). */
+body .main-content { max-width: none !important; padding-left: 16px !important; padding-right: 16px !important; }
+.adm-wrap { max-width: none; margin: 0; padding: 12px 0 24px; }
+
+.adm-header { margin-bottom: 24px; }
+.adm-header h3 { font-weight: 800; margin: 0; font-size: 1.4rem; color: #0f172a; }
+.adm-header p  { margin: 3px 0 0; font-size: .85rem; color: #64748b; }
+
+/* ══ Tabs ══ */
+.adm-tabs {
+    display: flex; align-items: flex-end; gap: 6px;
+    /* Cùng khung nội dung (1080px, canh giữa) như Thư viện / Lớp học -> chuyển trang không lệch */
+    max-width: var(--content-narrow); margin: 0 auto 12px;
+    border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;   /* header bar giống Thư viện / Lớp học */
+    overflow-x: auto; scrollbar-width: none;
+}
+.adm-tabs::-webkit-scrollbar { display: none; }
+.adm-tab-btn {
+    padding: 9px 16px; border-radius: 10px !important;
+    border: 1px solid #e2e8f0; background: #fff;
+    font-weight: 600; color: #64748b;
+    font-size: .9rem !important;   /* bằng pills trang Phòng thi */
+    cursor: pointer; transition: all .2s;
+    white-space: nowrap; flex-shrink: 0;
+}
+.adm-tab-btn:hover  { color: #1d4ed8; border-color: #1d4ed8; background: #fff; }
+.adm-tab-btn.active { color: #1d4ed8; border-color: #1d4ed8; background: #eff6ff; }
+.adm-tab-pane { display: none; }
+.adm-tab-pane.active { display: block; }
+
+/* ══ Panel ══ */
+.adm-panel {
+    background: #fff; border: 1px solid #e2e8f0;
+    border-radius: 16px !important; padding: 22px; margin-bottom: 20px;
+}
+.adm-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px; margin-bottom: 18px;
+}
+.adm-panel-header h5 { font-weight: 700; margin: 0; font-size: 1rem; }
+
+/* ══ Table (tab người dùng) ══ */
+.adm-panel .table-responsive {
+    border: 1px solid var(--table-border, #e2e8f0); border-radius: 16px !important; overflow: hidden;
+}
+.adm-table { width: 100%; border-collapse: collapse; color: #475569; font-size: .875rem; }
+.adm-table thead th {
+    background: #f1f5f9; color: #64748b;
+    font-size: .82rem; letter-spacing: .2px;
+    padding: 14px 16px; font-weight: 700;
+    border: none; border-bottom: 1px solid #e2e8f0;
+    text-align: left; white-space: nowrap;
+}
+.adm-table tbody td {
+    padding: 14px 16px; vertical-align: middle;
+    color: #475569; font-size: .88rem; font-weight: 500;
+    border: none; border-bottom: 1px solid #eef2f7;
+}
+.adm-table tbody tr:last-child td { border-bottom: none; }
+.adm-table tbody td.fw-bold { color: #0f172a; font-weight: 700; }
+.adm-table tbody tr { transition: background .15s; }
+.adm-table tbody tr:hover td { background: #f8fafc; }
+
+/* ══ Tags ══ */
+.tag { padding: 3px 10px; border-radius: 6px; font-size: .7rem; font-weight: 700; display: inline-block; }
+.tag-active { background: rgba(16,185,129,.12);  color: #059669; }
+.tag-locked { background: rgba(239,68,68,.12);   color: #dc2626; }
+
+/* ══ Action buttons ══ */
+.btn-adm {
+    padding: 4px 11px; border-radius: 7px; font-size: .75rem;
+    font-weight: 600; text-decoration: none; display: inline-flex;
+    align-items: center; gap: 4px; border: 1px solid transparent;
+    cursor: pointer; transition: opacity .15s;
+}
+.btn-adm:hover { opacity: .78; }
+.btn-lock   { background: rgba(239,68,68,.1);  color: #dc2626; border-color: rgba(239,68,68,.2); }
+.btn-unlock { background: rgba(16,185,129,.1); color: #059669; border-color: rgba(16,185,129,.2); }
+.btn-delete { background: rgba(239,68,68,.08); color: #dc2626; border-color: rgba(239,68,68,.15); }
+.role-select {
+    padding: 3px 8px; border-radius: 6px; font-size: .75rem;
+    border: 1px solid #e2e8f0; background: #f8fafc;
+    cursor: pointer; color: #334155; font-weight: 600;
+}
+.role-select:focus { outline: none; border-color: #93c5fd; }
+
+/* ══ Empty state ══ */
+.empty-state { text-align: center; padding: 40px 24px; color: #94a3b8; }
+.empty-state i { font-size: 2.3rem; margin-bottom: 10px; display: block; color: #cbd5e1; }
+.empty-state p { margin: 0; font-size: .9rem; }
+
+/* ═══════════════════════════════════════════════════════════
+   DASHBOARD (tab Thống kê)
+═══════════════════════════════════════════════════════════ */
+.dash { --line:#e5e7eb; }
+
+/* Tiêu đề mỗi section */
+.dash-sec-title {
+    display: flex; align-items: center; gap: 9px;
+    font-weight: 800; font-size: 1.02rem; color: #0f172a;
+    margin: 26px 2px 14px;
+}
+.dash-sec-title:first-of-type { margin-top: 6px; }
+.dash-sec-title i { color: #2563eb; font-size: .98rem; }
+.dash-sec-title .sub { font-weight: 600; font-size: .78rem; color: #94a3b8; margin-left: auto; }
+
+/* ── Bộ lọc ── */
+/* Thu gọn nền trắng, thấp (label & select cùng hàng) + dời SÁT PHẢI. */
+.dash-filter {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    width: fit-content; margin-left: auto;
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 14px !important; padding: 7px 10px; box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+.dash-fg { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.dash-fg label { font-size: .72rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; }
+.dash-fg select {
+    padding: 6px 12px; border-radius: 10px !important; border: 1px solid var(--line);
+    background: #f8fafc; font-size: .84rem; color: #334155; font-weight: 600;
+    cursor: pointer; transition: border-color .15s;
+}
+.dash-fg select:focus { outline: none; border-color: #93c5fd; background: #fff; }
+.dash-filter-actions { display: flex; gap: 8px; }
+.dash-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 9px; font-size: .82rem; font-weight: 700;
+    cursor: pointer; border: 1px solid transparent; transition: all .15s; white-space: nowrap;
+}
+.dash-btn-primary { background: #2563eb; color: #fff; }
+.dash-btn-primary:hover { background: #1d4ed8; box-shadow: 0 4px 12px rgba(37,99,235,.28); }
+.dash-btn-ghost { background: #fff; color: #475569; border-color: var(--line); }
+.dash-btn-ghost:hover { border-color: #cbd5e1; background: #f8fafc; }
+.dash-btn.spinning i { animation: dash-spin .7s linear infinite; }
+@keyframes dash-spin { to { transform: rotate(360deg); } }
+
+/* ── Nhóm KPI trong Tổng quan: chia rõ Người dùng / Môn học / Đề thi / Phòng thi ── */
+/* Tổng quan: 6 ô xếp 2 CỘT × 3 HÀNG (4 nhóm KPI + 2 ô chi tiết).
+   Cột rộng theo NỘI DUNG (nền trắng co theo), dồn TRÁI, chừa trống bên phải. */
+.dash-overview {
+    display: grid; grid-template-columns: repeat(10, 1fr);  /* lưới 10 cột: nhóm KPI = 2 cột (5 ô/hàng), ô chi tiết = 5 cột (2 ô/hàng) */
+    align-items: start;
+    column-gap: 18px; row-gap: 22px;         /* cách nhau rộng ra, không còn dính chùm */
+    margin-top: 26px;                        /* cách thanh lọc (chọn ngày + Làm mới) 1 khoảng */
+}
+.kpi-group      { grid-column: span 2; }     /* giữ nguyên bề rộng như lưới 5 cột cũ */
+.dash-overview > .dash-box-sm { grid-column: span 3; }   /* 2 ô chi tiết rộng vừa phải (~1.5 ô KPI), không kéo dài quá */
+@media (max-width: 1300px){
+    .dash-overview { grid-template-columns: repeat(6, 1fr); }
+    .dash-overview > .dash-box-sm { grid-column: span 3; }
+}
+@media (max-width: 900px) {
+    .dash-overview { grid-template-columns: repeat(4, 1fr); }
+    .dash-overview > .dash-box-sm { grid-column: span 4; }
+}
+@media (max-width: 560px) {
+    .dash-overview { grid-template-columns: repeat(2, 1fr); }
+    .dash-overview > .dash-box-sm { grid-column: span 2; }
+}
+.kpi-group {
+    background: #f8fafc; border: 1px solid var(--line);
+    border-radius: 14px !important; padding: 16px 16px 18px;
+    box-shadow: 0 1px 3px rgba(15,23,42,.05);   /* tách khối khỏi nền trang */
+}
+.kpi-group-h {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 800; font-size: .78rem; color: #0f172a;
+    text-transform: uppercase; letter-spacing: .3px; margin-bottom: 12px;
+}
+.kpi-group-h i { color: #2563eb; }
+
+/* ── KPI grid (GỌN: icon trái + số/nhãn phải, xếp nhiều cột để đỡ chiếm chỗ) ── */
+.kpi-grid {
+    display: grid; gap: 10px;
+    grid-template-columns: 1fr;             /* xếp DỌC: mỗi thẻ một hàng, chồng xuống */
+}
+.kpi-val { flex: 0 0 auto; }                 /* số không co lại */
+.kpi-lbl { white-space: nowrap; }            /* nhãn nằm trên MỘT dòng, không bị ngắt */
+@media (max-width: 560px) {                  /* màn hình rất nhỏ: cho nhãn xuống dòng nếu cần */
+    .kpi-lbl { white-space: normal; }
+}
+
+/* ── Danh sách chi tiết trong Tổng quan (điểm TB theo lớp / AI theo người dùng) ── */
+.ov-row {
+    display: grid; grid-template-columns: 1fr 92px auto; align-items: center;
+    gap: 12px; padding: 9px 2px; border-bottom: 1px solid #f1f5f9;
+    animation: dash-fade .4s both;
+}
+.ov-row:last-child { border-bottom: none; }
+.ov-name { font-size: .82rem; font-weight: 600; color: #0f172a; display: flex; flex-direction: column; min-width: 0; }
+.ov-name .ov-sub { font-size: .7rem; color: #94a3b8; font-weight: 500; }
+.ov-bar { height: 7px; background: #eef2f7; border-radius: 99px; overflow: hidden; }
+.ov-bar span { display: block; height: 100%; border-radius: 99px; }
+.ov-val { font-size: .85rem; font-weight: 800; color: #0f172a; text-align: right; white-space: nowrap; }
+/* Ô "Điểm TB theo lớp" & "Số lần sử dụng tạo câu hỏi" — thấp gọn cho đồng bộ */
+.dash-box-sm .dash-box-h { margin-bottom: 8px; }
+.dash-box-sm .ov-row { padding: 6px 2px; }
+.dash-box-sm .dash-scroll { max-height: 240px; }
+.dash-scroll { max-height: 320px; overflow-y: auto; padding-right: 4px; }
+.dash-scroll::-webkit-scrollbar { width: 6px; }
+.dash-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
+.kpi-card {
+    background: #fff; border: 1px solid var(--line); border-radius: 14px !important;
+    padding: 10px 14px; position: relative; overflow: hidden;
+    display: flex; align-items: center; gap: 12px;    /* icon | (số + chữ cùng 1 hàng) */
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+    transition: transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s;
+    opacity: 0; transform: translateY(12px);
+}
+.kpi-card.in { opacity: 1; transform: translateY(0); }
+.kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 26px rgba(15,23,42,.10); }
+.kpi-card:hover .kpi-icon { transform: scale(1.1) rotate(-4deg); }
+.kpi-icon {
+    flex: 0 0 auto;
+    width: 38px; height: 38px; border-radius: 11px !important;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.02rem; transition: transform .25s;
+}
+/* CHỮ đứng TRƯỚC SỐ trên cùng một hàng (vd: Tổng học phần: 308) — KHÔNG cho số rớt xuống dòng dưới */
+.kpi-text { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+.kpi-val { font-size: 1.2rem; font-weight: 900; line-height: 1.1; color: #0f172a; letter-spacing: -.3px; }
+.kpi-lbl { font-size: .8rem; font-weight: 700; color: #334155; line-height: 1.25; }
+.kpi-desc { display: none; }   /* ẩn dòng mô tả để gọn */
+.kpi-card::after {
+    content: ''; position: absolute; right: -18px; top: -18px;
+    width: 78px; height: 78px; border-radius: 50%;
+    background: currentColor; opacity: .05;
+}
+
+/* ── Cột 2/3 ── */
+.dash-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px){ .dash-two { grid-template-columns: 1fr; } }
+/* Hàng Hoạt động (rộng) + Cảnh báo (hẹp) */
+.dash-two-alert { grid-template-columns: 2.2fr 1fr; }
+@media (max-width: 900px){ .dash-two-alert { grid-template-columns: 1fr; } }
+
+.dash-box {
+    background: #fff; border: 1px solid var(--line); border-radius: 16px !important;
+    padding: 18px 20px; box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+.dash-box-h {
+    display: flex; align-items: center; gap: 8px; font-weight: 700;
+    font-size: .9rem; color: #1e293b; margin-bottom: 14px;
+}
+.dash-box-h i { font-size: .9rem; }
+.dash-box-h .cnt {
+    margin-left: auto; font-size: .72rem; font-weight: 700; color: #64748b;
+    background: #f1f5f9; padding: 3px 9px; border-radius: 99px;
+}
+
+/* ── Cảnh báo ── */
+.alert-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px; border-radius: 12px !important; margin-bottom: 10px;
+    border: 1px solid; animation: dash-fade .4s both;
+}
+.alert-item:last-child { margin-bottom: 0; }
+.alert-item .ai-ic { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: .95rem; }
+.alert-item .ai-title { font-weight: 700; font-size: .85rem; }
+.alert-item .ai-desc  { font-size: .78rem; opacity: .82; margin-top: 1px; }
+.alert-item .ai-count { margin-left: auto; font-weight: 900; font-size: 1.1rem; align-self: center; }
+.alert-warning { background: #fffbeb; border-color: #fde68a; color: #b45309; }
+.alert-warning .ai-ic { background: #fef3c7; color: #d97706; }
+.alert-danger  { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+.alert-danger  .ai-ic { background: #fee2e2; color: #dc2626; }
+.alert-info    { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.alert-info    .ai-ic { background: #dbeafe; color: #2563eb; }
+.alert-ok {
+    display: flex; align-items: center; gap: 12px; padding: 16px 14px;
+    background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; color: #15803d;
+    font-weight: 600; font-size: .88rem;
+}
+.alert-ok i { font-size: 1.3rem; }
+
+/* ── Hoạt động gần đây ── */
+.act-list { display: flex; flex-direction: column; }
+.act-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 2px; border-bottom: 1px solid #f1f5f9; animation: dash-fade .4s both; }
+.act-item:last-child { border-bottom: none; }
+.act-ic { width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: .82rem; }
+.act-txt { font-size: .82rem; color: #334155; line-height: 1.45; }
+.act-txt b { color: #0f172a; font-weight: 700; }
+.act-time { font-size: .72rem; color: #94a3b8; margin-top: 2px; }
+.ic-blue   { background: #dbeafe; color: #2563eb; }
+.ic-green  { background: #dcfce7; color: #16a34a; }
+.ic-purple { background: #ede9fe; color: #7c3aed; }
+.ic-pink   { background: #fce7f3; color: #db2777; }
+.ic-amber  { background: #fef3c7; color: #d97706; }
+
+/* ── Chart grid ── */
+.chart-grid { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 20px; row-gap: 24px; }
+@media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+.chart-card {
+    background: #fff; border: 1px solid var(--line); border-radius: 16px !important;
+    padding: 18px 20px; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+    opacity: 0; transform: translateY(12px); transition: opacity .5s, transform .5s;
+}
+/* Mỗi sơ đồ một tông nền pastel riêng để không bị dính chùm */
+.chart-card.cc-blue   { background: rgb(224,233,252); border-color: rgb(168,193,247); }
+.chart-card.cc-green  { background: rgb(220,240,234); border-color: rgb(155,213,195); }
+.chart-card.cc-amber  { background: rgb(250,236,220); border-color: rgb(240,201,155); }
+.chart-card.cc-purple { background: rgb(237,227,253); border-color: rgb(203,176,248); }
+.chart-card.cc-pink   { background: rgb(250,225,236); border-color: rgb(241,169,201); }
+.chart-card.in { opacity: 1; transform: translateY(0); }
+.chart-card h6 {
+    font-weight: 700; font-size: .87rem; color: #1e293b;
+    margin: 0 0 4px; display: flex; align-items: center; gap: 8px;
+}
+.chart-card h6 i { font-size: .9rem; }
+.chart-card .csub { font-size: .73rem; color: #94a3b8; margin: 0 0 12px 26px; }
+.chart-canvas-wrap { position: relative; height: 240px; }
+.chart-empty {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #cbd5e1; gap: 8px;
+}
+.chart-empty i { font-size: 2rem; }
+.chart-empty span { font-size: .82rem; color: #94a3b8; font-weight: 600; }
+
+/* ── Bảng nhỏ trong dashboard ── */
+.mini-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.mini-table thead th {
+    text-align: left; font-weight: 700; color: #64748b; font-size: .72rem;
+    text-transform: uppercase; letter-spacing: .3px; padding: 9px 10px;
+    border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.mini-table tbody td { padding: 10px 10px; border-bottom: 1px solid #f1f5f9; color: #475569; vertical-align: middle; }
+.mini-table tbody tr:last-child td { border-bottom: none; }
+.mini-table tbody tr { transition: background .15s; }
+.mini-table tbody tr:hover td { background: #f8fafc; }
+.mini-table .num { text-align: center; font-weight: 700; color: #0f172a; }
+.mini-table .rank {
+    width: 24px; height: 24px; border-radius: 7px; background: #eff6ff; color: #2563eb;
+    display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: .72rem;
+}
+.pill { padding: 3px 9px; border-radius: 99px; font-size: .68rem; font-weight: 700; white-space: nowrap; }
+.pill-open   { background: #dcfce7; color: #15803d; }
+.pill-prep   { background: #fef3c7; color: #b45309; }
+.pill-closed { background: #f1f5f9; color: #64748b; }
+.pill-ok     { background: #dcfce7; color: #15803d; }
+.chip-de  { background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: .72rem; }
+.chip-tb  { background: #fef3c7; color: #b45309; padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: .72rem; }
+.chip-kho { background: #fee2e2; color: #b91c1c; padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: .72rem; }
+
+/* ── Trạng thái tải / lỗi ── */
+.dash-state { padding: 30px; text-align: center; color: #94a3b8; }
+.dash-state .spin { font-size: 1.6rem; color: #cbd5e1; animation: dash-spin .8s linear infinite; }
+.dash-state.err { color: #dc2626; }
+.dash-skel {
+    background: linear-gradient(90deg,#f1f5f9 25%,#e9eef4 37%,#f1f5f9 63%);
+    background-size: 400% 100%; animation: dash-shimmer 1.3s ease infinite; border-radius: 8px;
+}
+@keyframes dash-shimmer { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
+@keyframes dash-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+@media print {
+    .adm-tabs, .dash-filter, .stewie-navbar, nav, footer, .app-footer { display: none !important; }
+    .kpi-card, .chart-card { opacity: 1 !important; transform: none !important; box-shadow: none !important; }
+    body .main-layout { background: #fff !important; }
+}
+
+/* ══ Confirm modal ══ */
+.confirm-modal-bg {
+    display: none; position: fixed; inset: 0;
+    background: rgba(15,23,42,.45); z-index: 9999; align-items: center; justify-content: center;
+}
+.confirm-modal-bg.show { display: flex; }
+.confirm-box {
+    background: #fff; border-radius: 18px; padding: 32px 36px;
+    max-width: 400px; width: 90%;
+    box-shadow: 0 20px 60px rgba(15,23,42,.18); text-align: center;
+}
+.confirm-box h5 { font-weight: 700; margin-bottom: 10px; }
+.confirm-box p  { color: #64748b; font-size: .9rem; margin-bottom: 22px; }
+.confirm-btns   { display: flex; gap: 10px; justify-content: center; }
+.confirm-btns button { padding: 9px 22px; border-radius: 9px; font-weight: 600; font-size: .875rem; border: none; cursor: pointer; }
+.btn-cancel-confirm { background: #f1f5f9; color: #475569; }
+.btn-ok-confirm     { background: #dc2626; color: #fff; }
+
+/* ===================================================================
+   ĐỒNG NHẤT CỠ CHỮ TOÀN TRANG QUẢN TRỊ ≈ 0.8rem (giống các trang khác).
+   Nạp CUỐI trong style để ghi đè các cỡ chữ riêng lẻ ở trên.
+   KHÔNG nhắm vào <i>/.fa* nên ICON giữ nguyên kích thước.
+   =================================================================== */
+.dash, .adm-tabs, .adm-panel,
+.dash .kpi-lbl, .dash .kpi-desc, .dash .csub,
+.dash .act-txt, .dash .act-time,
+.dash .ov-name, .dash .ov-sub, .dash .ov-val,
+.dash .alert-item .ai-title, .dash .alert-item .ai-desc,
+.dash .mini-table, .dash .mini-table th, .dash .mini-table td,
+.dash .kpi-group-h, .dash .dash-fg select, .dash .dash-btn, .dash .cnt,
+.adm-panel p, .adm-panel label, .adm-panel li,
+.dash .empty-state p, .dash .chart-empty span {
+    font-size: 0.8rem !important;
+}
+/* Nhấn NHẸ ở vài chỗ để dashboard vẫn dễ đọc (2 mức như các trang khác) */
+.dash .dash-sec-title { font-size: 0.92rem !important; }
+.dash .dash-box-h, .dash .chart-card h6, .adm-panel-header h5 { font-size: 0.85rem !important; }
+.dash .kpi-val { font-size: 0.85rem !important; }   /* số nhỏ lại, đồng bộ với chữ (vẫn in đậm để nổi) */
+.dash #pt-open { font-size: 1.55rem !important; }
+.dash .ai-count { font-size: 0.95rem !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="adm-wrap">
+    <!-- ── TABS ── -->
+    <div class="adm-tabs" id="adm-tab-nav">
+        <button class="adm-tab-btn active" data-target="thong-ke">
+            <i class="fas fa-chart-line me-1"></i>Thống kê
+        </button>
+        <button class="adm-tab-btn" data-target="users">
+            <i class="fas fa-users me-1"></i>Người dùng
+        </button>
+        <button class="adm-tab-btn" data-target="prompt">
+            <i class="fas fa-robot me-1"></i>Prompt AI
+        </button>
+    </div>
+
+    <!-- ════════════════════════════ TAB: THỐNG KÊ (DASHBOARD) ════════════════════════════ -->
+    <div class="adm-tab-pane active" id="tab-thong-ke">
+      <div class="dash">
+
+        <!-- 1) BỘ LỌC (chỉ còn Khoảng thời gian + Làm mới) -->
+        <div class="dash-filter">
+            <div class="dash-fg">
+                <select id="f-range">
+                    <option value="all" selected>Tất cả</option>
+                    <option value="today">Hôm nay</option>
+                    <option value="7d">7 ngày qua</option>
+                    <option value="30d">30 ngày qua</option>
+                    <option value="semester">Học kỳ này</option>
+                </select>
+            </div>
+            <div class="dash-filter-actions">
+                <button class="dash-btn dash-btn-primary" id="btn-refresh">
+                    <i class="fas fa-rotate-right"></i>Làm mới
+                </button>
+            </div>
+        </div>
+
+        <!-- 2) KPI TỔNG QUAN — 6 ô xếp 2 CỘT × 3 HÀNG (4 nhóm + 2 ô chi tiết) -->
+        <div class="dash-overview">
+            <!-- 4 nhóm KPI do JS render; display:contents để 4 nhóm thành ô lưới trực tiếp -->
+            <div class="kpi-groups" id="kpi-groups" style="display:contents;">
+                <div class="dash-state" style="grid-column:1/-1;"><i class="fas fa-spinner spin"></i></div>
+            </div>
+            <div class="dash-box dash-box-sm" style="background:rgb(230,244,247);border-color:rgb(186,224,233);padding:12px 14px;">
+                <div class="dash-box-h"><i class="fas fa-users-rectangle" style="color:#0891b2;"></i>Điểm trung bình theo lớp
+                    <span class="cnt" style="background:#e0f2fe;color:#0369a1;" id="ov-score-hint" hidden></span></div>
+                <div id="ov-score-class" class="dash-scroll"><div class="dash-state"><i class="fas fa-spinner spin"></i></div></div>
+            </div>
+            <div class="dash-box dash-box-sm" style="background:rgb(242,235,253);border-color:rgb(218,200,250);padding:12px 14px;">
+                <div class="dash-box-h"><i class="fas fa-brain" style="color:#7c3aed;"></i>Số lần sử dụng tạo câu hỏi
+                    <span class="cnt" style="background:#ede9fe;color:#6d28d9;" id="ov-ai-hint" hidden></span></div>
+                <div id="ov-ai-user" class="dash-scroll"><div class="dash-state"><i class="fas fa-spinner spin"></i></div></div>
+            </div>
+        </div>
+
+        <!-- 3+4) HOẠT ĐỘNG (trái, rộng) + CẢNH BÁO (phải, hẹp) — đóng khung màu, cách Tổng quan 1 khoảng trắng -->
+        <div class="dash-two dash-two-alert" style="margin-top:44px;">
+            <div class="dash-box" style="background:rgb(233,239,253);border-color:rgb(194,211,249);">
+                <div class="dash-box-h"><i class="fas fa-clock-rotate-left" style="color:#2563eb;"></i>Hoạt động gần đây</div>
+                <div id="activities-body"><div class="dash-state"><i class="fas fa-spinner spin"></i></div></div>
+            </div>
+            <div class="dash-box" style="background:rgb(251,241,230);border-color:rgb(244,217,185);">
+                <div class="dash-box-h"><i class="fas fa-triangle-exclamation" style="color:#d97706;"></i>Cảnh báo cần xử lý
+                    <span class="cnt" id="alert-cnt" hidden>0</span></div>
+                <div id="alerts-body"><div class="dash-state"><i class="fas fa-spinner spin"></i></div></div>
+            </div>
+        </div>
+
+        <!-- ══════════ THỐNG KÊ TRỌNG TÂM (5 sơ đồ) ══════════ -->
+        <div class="dash-sec-title" style="margin-top:34px;"><i class="fas fa-chart-pie"></i>Thống kê trọng tâm
+            <span class="sub"> </span></div>
+        <div class="chart-grid">
+            <div class="chart-card cc-blue"><h6><i class="fas fa-folder-tree" style="color:#2563eb;"></i>Học phần được tạo đề thi nhiều nhất</h6>
+                <div class="chart-canvas-wrap"><canvas id="c-examSubject"></canvas><div class="chart-empty" hidden><i class="fas fa-folder-tree"></i><span>Chưa có dữ liệu</span></div></div></div>
+            <div class="chart-card cc-green"><h6><i class="fas fa-layer-group" style="color:#059669;"></i>Phân bố độ khó ngân hàng câu hỏi</h6>
+                <p class="csub">Dễ · Trung bình · Khó</p>
+                <div class="chart-canvas-wrap"><canvas id="c-difficulty"></canvas><div class="chart-empty" hidden><i class="fas fa-layer-group"></i><span>Chưa có dữ liệu</span></div></div></div>
+
+            <div class="chart-card cc-amber"><h6><i class="fas fa-book" style="color:#d97706;"></i>Học phần có nhiều câu hỏi nhất</h6>
+                <p class="csub">5 học phần dẫn đầu về số câu hỏi ngân hàng</p>
+                <div class="chart-canvas-wrap"><canvas id="c-topSubjects"></canvas><div class="chart-empty" hidden><i class="fas fa-book"></i><span>Chưa có dữ liệu</span></div></div></div>
+
+            <div class="chart-card cc-purple"><h6><i class="fas fa-file-lines" style="color:#7c3aed;"></i>Đề thi tạo theo tháng</h6>
+                <p class="csub">Số đề thi được tạo (6 tháng gần nhất)</p>
+                <div class="chart-canvas-wrap"><canvas id="c-examMonth"></canvas><div class="chart-empty" hidden><i class="fas fa-file-lines"></i><span>Chưa có dữ liệu</span></div></div></div>
+
+            <div class="chart-card cc-pink"><h6><i class="fas fa-door-open" style="color:#db2777;"></i>Trạng thái phòng thi</h6>
+                <p class="csub">Đang mở · Sắp diễn ra · Đã đóng</p>
+                <div class="chart-canvas-wrap"><canvas id="c-roomStatus"></canvas><div class="chart-empty" hidden><i class="fas fa-door-open"></i><span>Chưa có dữ liệu</span></div></div></div>
+        </div>
+
+      </div>
+    </div><!-- /tab-thong-ke -->
+
+    <!-- ════════════════════════════ TAB: NGƯỜI DÙNG ════════════════════════════ -->
+    <div class="adm-tab-pane" id="tab-users">
+        <div class="adm-panel">
+            <div class="adm-panel-header">
+                <h5><i class="fas fa-users-gear me-2" style="color:#1d4ed8;"></i>Danh sách người dùng</h5>
+                <span class="tag" style="background:rgba(37,99,235,.1);color:#1d4ed8;padding:5px 12px;">
+                    {{ users|length }} tài khoản
+                </span>
+            </div>
+            <div class="table-responsive">
+            <table class="adm-table">
+                <thead><tr>
+                    <th>STT</th><th>Họ tên</th><th>Tài khoản</th>
+                    <th>Email</th><th>Vai trò</th>
+                    <th class="text-end">Thao tác</th>
+                </tr></thead>
+                <tbody>
+                {% for u in users %}
+                <tr>
+                    <td class="text-muted" style="font-size:.8rem;">{{ loop.index }}</td>
+                    <td class="fw-bold">{{ u.ho_ten }}
+                        {% if u.trang_thai == 'locked' %}<span class="tag tag-locked ms-1">Đã khóa</span>{% endif %}
+                    </td>
+                    <td><span class="text-muted">{{ u.username }}</span></td>
+                    <td><span class="text-muted" style="font-size:.82rem;">{{ u.email }}</span></td>
+                    <td>
+                        <form method="post" action="/admin/change_role/{{ u.id }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="role" class="role-select" onchange="this.form.submit()">
+                                <option value="giao_vien" {% if u.role=='giao_vien' %}selected{% endif %}>Giáo viên</option>
+                                <option value="hoc_sinh"  {% if u.role=='hoc_sinh'  %}selected{% endif %}>Học sinh</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td class="text-end" style="white-space:nowrap;">
+                        {# POST + CSRF: nếu để link GET, kẻ xấu chỉ cần dụ admin mở một
+                           trang có <img src="/admin/toggle_user/1"> là khóa được tài khoản. #}
+                        <form method="POST" action="{{ url_for('admin.toggle_user', user_id=u.id) }}"
+                              class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            {% if u.trang_thai == 'locked' %}
+                                <button type="submit" class="btn-adm btn-unlock me-1">
+                                    <i class="fas fa-unlock"></i>Mở khóa
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn-adm btn-lock me-1">
+                                    <i class="fas fa-lock"></i>Khóa
+                                </button>
+                            {% endif %}
+                        </form>
+                        <button type="button" class="btn-adm btn-delete"
+                            onclick="confirmDelete('{{ url_for('admin.delete_user', user_id=u.id) }}',
+                                                   'Xóa người dùng',
+                                                   'Bạn có chắc muốn xóa tài khoản <strong>{{ u.ho_ten }}</strong>?<br>Hành động này không thể hoàn tác.')">
+                            <i class="fas fa-trash"></i>Xóa
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6">
+                    <div class="empty-state"><i class="fas fa-users-slash"></i><p>Chưa có người dùng nào.</p></div>
+                </td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════ TAB: PROMPT AI ════════════════════════════ -->
+    <div class="adm-tab-pane" id="tab-prompt">
+        <div class="adm-panel">
+            <div class="adm-panel-header">
+                <h5>
+                    <i class="fas fa-robot me-2" style="color:#d97706;"></i>Cấu hình Prompt AI
+                    <button type="button" id="btnPromptHint" title="Xem lưu ý"
+                        onclick="var b=document.getElementById('promptHintBox');
+                                 var open=b.style.display==='none';
+                                 b.style.display=open?'block':'none';
+                                 this.style.background=open?'#1d4ed8':'';"
+                        style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+                               border-radius:50%;background:#2563eb;color:#fff;border:none;cursor:pointer;
+                               font-size:.68rem;font-weight:800;line-height:1;margin-left:6px;vertical-align:middle;">
+                        <i class="fas fa-info"></i>
+                    </button>
+                </h5>
+                {% if prompt_is_custom %}
+                <span class="tag" style="background:rgba(217,119,6,.12);color:#d97706;padding:5px 12px;">
+                    <i class="fas fa-pen me-1"></i>Đang dùng bản tùy chỉnh</span>
+                {% else %}
+                <span class="tag" style="background:rgba(37,99,235,.1);color:#1d4ed8;padding:5px 12px;">
+                    <i class="fas fa-lock me-1"></i>Đang dùng bản mặc định</span>
+                {% endif %}
+            </div>
+
+            <div id="promptHintBox" style="display:none;background:#f0f6ff;border:1px solid rgba(37,99,235,.2);
+                        border-left:4px solid #2563eb;border-radius:10px;padding:14px 18px;margin-bottom:18px;
+                        font-size:.86rem;color:#334155;line-height:1.6;">
+                <div style="font-weight:700;color:#1d4ed8;margin-bottom:6px;">
+                    <i class="fas fa-circle-info me-1"></i>Đây là phần "luật lệ" cố định gửi cho AI mỗi lần tạo câu hỏi.
+                </div>
+                Bạn có thể sửa cách diễn đạt để cải thiện chất lượng câu hỏi. Nội dung lưu vào file cấu hình
+                (<code>ai_prompt.json</code>) — <b>không sửa mã nguồn</b>, áp dụng ngay cho các lần tạo sau.
+                <div style="color:#b45309;margin-top:8px;">
+                    <i class="fas fa-triangle-exclamation me-1"></i>
+                    <b>Lưu ý:</b> KHÔNG nên thay đổi yêu cầu "trả về JSON" — nếu bỏ, hệ thống sẽ không đọc được
+                    kết quả và tính năng tạo câu hỏi sẽ hỏng. Lỡ sai thì bấm <b>Khôi phục mặc định</b>.
+                </div>
+            </div>
+
+            <form method="post" action="/admin/prompt">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label style="font-weight:600;color:#334155;font-size:.88rem;margin-bottom:6px;display:block;">
+                    Nội dung System Prompt
+                </label>
+                <textarea name="system_prompt" rows="14" spellcheck="false"
+                    style="width:100%;border:1px solid var(--table-border, #e2e8f0);border-radius:12px;padding:14px 16px;
+                           font-family:Consolas,'Courier New',monospace;font-size:.85rem;line-height:1.6;color:#0f172a;
+                           background:#fcfdff;resize:vertical;">{{ system_prompt }}</textarea>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+                    <button type="submit" class="btn btn-primary"
+                        style="background:linear-gradient(135deg,#2563eb,#3b82f6);border:none;color:#fff;
+                               padding:10px 22px;border-radius:10px;font-weight:700;">
+                        <i class="fas fa-floppy-disk me-1"></i>Lưu prompt
+                    </button>
+                </div>
+            </form>
+
+            <form method="post" action="/admin/prompt/reset" style="margin-top:12px;"
+                  onsubmit="return confirm('Khôi phục prompt về bản mặc định trong hệ thống? Bản tùy chỉnh hiện tại sẽ bị xóa.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                    style="background:#fff;border:1px solid var(--table-border, #e2e8f0);color:#dc2626;
+                           padding:9px 18px;border-radius:10px;font-weight:600;cursor:pointer;">
+                    <i class="fas fa-rotate-left me-1"></i>Khôi phục mặc định
+                </button>
+            </form>
+
+            <div style="margin-top:24px;">
+                <div style="font-weight:700;color:#64748b;font-size:.85rem;margin-bottom:8px;">
+                    <i class="fas fa-lock me-1"></i>Phần CỐ ĐỊNH (hệ thống tự ghép, không chỉnh tại đây)
+                </div>
+                <div style="background:#f8fafc;border:1px dashed var(--table-border, #e2e8f0);border-radius:10px;
+                            padding:14px 16px;font-size:.82rem;color:#64748b;line-height:1.7;">
+                    Mỗi lần tạo, hệ thống tự ghép thêm vào prompt các phần sau (đổi theo lựa chọn của giáo viên,
+                    nên <b>không gán cứng</b>):
+                    <ul style="margin:8px 0 0;padding-left:20px;">
+                        <li>Nội dung các chương trích từ file PDF.</li>
+                        <li>Số câu mỗi chương + phân bố Dễ / Trung bình / Khó.</li>
+                        <li>Văn phong (Ngắn gọn / Chuyên sâu / Dễ hiểu) &amp; có/không kèm giải thích.</li>
+                        <li><b>Khung định dạng JSON đầu ra</b> — khóa cứng để đảm bảo đọc được kết quả.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div><!-- /tab-prompt -->
+
+</div><!-- /.adm-wrap -->
+
+<!-- CONFIRM DELETE MODAL -->
+<div class="confirm-modal-bg" id="confirmModal">
+    <div class="confirm-box">
+        <div style="font-size:2.5rem;margin-bottom:12px;">🗑️</div>
+        <h5 id="confirmTitle">Xác nhận xóa</h5>
+        <p id="confirmMsg"></p>
+        <div class="confirm-btns">
+            <button class="btn-cancel-confirm" onclick="closeConfirm()">Hủy</button>
+            <form id="confirmForm" method="post" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn-ok-confirm">Xác nhận xóa</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════
+//  TAB SWITCHING (giữ nguyên hành vi #hash cũ: users / thong-ke / prompt)
+// ══════════════════════════════════════════════════════════
+document.querySelectorAll('.adm-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.adm-tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.adm-tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.target).classList.add('active');
+        history.replaceState(null, '', '#' + btn.dataset.target);
+        if (btn.dataset.target === 'thong-ke') Dashboard.ensureLoaded();
+    });
+});
+function admOpenTabFromHash() {
+    const hash = location.hash.replace('#', '');
+    const btn = hash && document.querySelector(`.adm-tab-btn[data-target="${hash}"]`);
+    if (btn && !btn.classList.contains('active')) btn.click();
+}
+admOpenTabFromHash();                                  // lúc tải trang (vào từ /admin#users…)
+window.addEventListener('hashchange', admOpenTabFromHash);   // đổi #hash mà không tải lại trang
+
+// ══════════════════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════════════════
+const Dashboard = (function () {
+    const nf = new Intl.NumberFormat('vi-VN');
+    const fmtInt   = v => nf.format(Math.round(v || 0));
+    const fmtFloat = v => (v || 0).toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+    const PAL = { blue:'#2563eb', green:'#059669', amber:'#d97706', red:'#dc2626',
+                  purple:'#7c3aed', pink:'#db2777', cyan:'#0891b2', slate:'#94a3b8', indigo:'#4f46e5' };
+
+    // Trộn màu với TRẮNG để ra nền pastel nhạt (a = tỷ lệ màu, càng nhỏ càng nhạt)
+    const lightTint = (hex, a) => {
+        const n = parseInt(hex.slice(1), 16);
+        const mix = c => Math.round(255 * (1 - a) + c * a);
+        return `rgb(${mix((n>>16)&255)}, ${mix((n>>8)&255)}, ${mix(n&255)})`;
+    };
+
+    // KPI chia theo NHÓM rõ ràng trong Tổng quan (mỗi nhóm 1 tông màu nền nhạt riêng)
+    const KPI_GROUPS = [
+        { title:'Người dùng', icon:'fa-users', c:PAL.blue, items:[
+            { k:'totalUsers',    lbl:'Tổng người dùng', ic:'fa-users',           c:PAL.blue },
+            { k:'totalTeachers', lbl:'Giảng viên',      ic:'fa-chalkboard-user', c:PAL.purple },
+            { k:'totalStudents', lbl:'Sinh viên',       ic:'fa-user-graduate',   c:PAL.green },
+        ]},
+        { title:'Môn học & ngân hàng câu hỏi', icon:'fa-book', c:PAL.amber, items:[
+            { k:'totalSubjects',        lbl:'Tổng học phần',     ic:'fa-book',     c:PAL.amber },
+            { k:'totalQuestions',       lbl:'Câu hỏi ngân hàng', ic:'fa-database', c:PAL.cyan },
+            { k:'aiGeneratedQuestions', lbl:'Câu hỏi do AI tạo', ic:'fa-brain', c:PAL.indigo },
+        ]},
+        { title:'Đề thi', icon:'fa-file-lines', c:PAL.purple, items:[
+            { k:'totalExams', lbl:'Tổng đề thi', ic:'fa-file-lines', c:PAL.blue },
+        ]},
+        { title:'Phòng thi', icon:'fa-door-open', c:PAL.pink, items:[
+            { k:'totalExamRooms',    lbl:'Tổng phòng thi',    ic:'fa-door-open',     c:PAL.pink },
+            { k:'openExamRooms',     lbl:'Phòng thi đang mở', ic:'fa-circle-play',   c:PAL.green },
+            { k:'totalSubmissions',  lbl:'Tổng lượt làm bài', ic:'fa-pen-to-square', c:PAL.cyan },
+        ]},
+        { title:'Quản lý lớp học', icon:'fa-school', c:PAL.green, items:[
+            { k:'totalClasses',        lbl:'Tổng lớp học',        ic:'fa-chalkboard', c:PAL.green },
+            { k:'totalClassStudents',  lbl:'Sinh viên trong lớp', ic:'fa-user-group', c:PAL.blue },
+            { k:'classesWithRoom',     lbl:'Lớp có phòng thi',    ic:'fa-door-open',  c:PAL.pink },
+        ]},
+    ];
+
+    let charts = {};
+    let loaded = false;
+    let inFlight = false;
+
+    function filters() {
+        const p = new URLSearchParams();
+        const rng = document.getElementById('f-range');
+        if (rng) p.set('range', rng.value);
+        return p.toString();
+    }
+
+    async function getJSON(url) {
+        const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || 'Lỗi dữ liệu');
+        return j.data;
+    }
+
+    // ── Hiệu ứng đếm số tăng dần ──
+    function countUp(el, target, isFloat) {
+        const dur = 900, t0 = performance.now();
+        function step(now) {
+            const p = Math.min(1, (now - t0) / dur);
+            const e = 1 - Math.pow(1 - p, 3);           // easeOutCubic
+            el.textContent = isFloat ? fmtFloat(target * e) : fmtInt(target * e);
+            if (p < 1) requestAnimationFrame(step);
+            else el.textContent = isFloat ? fmtFloat(target) : fmtInt(target);
+        }
+        requestAnimationFrame(step);
+    }
+
+    function renderKPIs(d) {
+        const wrap = document.getElementById('kpi-groups');
+        wrap.innerHTML = '';
+        let idx = 0;
+        KPI_GROUPS.forEach(g => {
+            const group = document.createElement('div');
+            group.className = 'kpi-group';
+            group.style.backgroundColor = lightTint(g.c, 0.17);   // nền pastel riêng từng nhóm — đậm đủ để phân biệt
+            group.style.borderColor = lightTint(g.c, 0.45);       // viền cùng tông, rõ hơn nền
+            group.innerHTML = `<div class="kpi-group-h"><i class="fas ${g.icon}" style="color:${g.c};"></i>${g.title}</div>
+                               <div class="kpi-grid"></div>`;
+            const grid = group.querySelector('.kpi-grid');
+            g.items.forEach(def => {
+                const val = d[def.k] || 0;
+                const card = document.createElement('div');
+                card.className = 'kpi-card';
+                card.style.color = def.c;      // dùng cho vòng tròn ::after
+                card.style.backgroundColor = '#fff';                   // thẻ TRẮNG nổi trên nền nhóm có màu
+                card.style.borderColor = lightTint(def.c, 0.22);       // viền cùng tông, nhạt
+                card.innerHTML =
+                    `<div class="kpi-icon" style="background:${def.c}1a;color:${def.c};"><i class="fas ${def.ic}"></i></div>
+                     <div class="kpi-text"><span class="kpi-lbl">${def.lbl}:</span><span class="kpi-val">0</span></div>`;
+                grid.appendChild(card);
+                const delay = 55 * idx++;
+                setTimeout(() => {
+                    card.classList.add('in');
+                    countUp(card.querySelector('.kpi-val'), val, def.float);
+                }, delay);
+            });
+            wrap.appendChild(group);
+        });
+    }
+
+    // Danh sách chi tiết trong Tổng quan: điểm TB theo lớp + số lần sử dụng tạo câu hỏi
+    function renderOverviewLists(stats, chartsD) {
+        // Điểm trung bình theo lớp (thang 10)
+        const sc  = document.getElementById('ov-score-class');
+        const hint = document.getElementById('ov-score-hint');
+        const sbc = (chartsD && chartsD.scoreByClass) || { labels: [], data: [], counts: [] };
+        if (!sbc.labels.length) {
+            hint.hidden = true;
+            sc.innerHTML = emptyBox('fa-users-rectangle', 'Chưa có dữ liệu điểm');
+        } else {
+            hint.hidden = false; hint.textContent = sbc.labels.length + ' lớp';
+            sc.innerHTML = sbc.labels.map((lop, i) => {
+                const v = sbc.data[i] || 0, cnt = (sbc.counts || [])[i] || 0;
+                const pct = Math.max(3, Math.min(100, v * 10));
+                return `<div class="ov-row">
+                    <div class="ov-name">${esc(lop)}<span class="ov-sub">${fmtInt(cnt)} bài đã nộp</span></div>
+                    <div class="ov-bar"><span style="width:${pct}%;background:#0891b2;"></span></div>
+                    <div class="ov-val">${fmtFloat(v)}</div></div>`;
+            }).join('');
+        }
+
+        // Số lần sử dụng tạo câu hỏi (theo người dùng: số lượt / tổng — ví dụ 1/3)
+        const au = document.getElementById('ov-ai-user');
+        const ah = document.getElementById('ov-ai-hint');
+        const ai = (stats && stats.aiUsageByUser) || { items: [], total: 0 };
+        if (!ai.items.length) {
+            ah.hidden = true;
+            au.innerHTML = emptyBox('fa-brain', 'Chưa có lượt dùng AI');
+        } else {
+            ah.hidden = false; ah.textContent = 'Tổng ' + fmtInt(ai.total) + ' lượt';
+            au.innerHTML = ai.items.map(it => {
+                const pct = ai.total ? Math.max(3, Math.round(it.so_lan / ai.total * 100)) : 0;
+                return `<div class="ov-row">
+                    <div class="ov-name">${esc(it.ho_ten)}<span class="ov-sub">${esc(it.vai_tro)}</span></div>
+                    <div class="ov-bar"><span style="width:${pct}%;background:#7c3aed;"></span></div>
+                    <div class="ov-val">${fmtInt(it.so_lan)}/${fmtInt(ai.total)}</div></div>`;
+            }).join('');
+        }
+    }
+
+    // Ô nổi bật "Phòng thi đang mở" trong mục Thống kê phòng thi
+    function renderRoomHighlight(d) {
+        const open = document.getElementById('pt-open');
+        const total = document.getElementById('pt-total');
+        if (open)  countUp(open, d.openExamRooms || 0, false);
+        if (total) total.textContent = fmtInt(d.totalExamRooms || 0);
+    }
+
+    function renderAlerts(alerts) {
+        const body = document.getElementById('alerts-body');
+        const cnt = document.getElementById('alert-cnt');
+        if (!alerts || !alerts.length) {
+            cnt.hidden = true;
+            body.innerHTML = `<div class="alert-ok"><i class="fas fa-circle-check"></i>
+                <div>Không có cảnh báo cần xử lý.<div style="font-weight:500;font-size:.78rem;opacity:.8;">Hệ thống đang hoạt động ổn định.</div></div></div>`;
+            return;
+        }
+        cnt.hidden = false; cnt.textContent = alerts.length;
+        body.innerHTML = alerts.map((a, i) =>
+            `<div class="alert-item alert-${a.level}" style="animation-delay:${i*60}ms">
+                <div class="ai-ic"><i class="fas ${a.icon}"></i></div>
+                <div><div class="ai-title">${esc(a.title)}</div><div class="ai-desc">${esc(a.desc)}</div></div>
+                ${a.count != null ? `<div class="ai-count">${fmtInt(a.count)}</div>` : ''}
+             </div>`).join('');
+    }
+
+    function renderActivities(list) {
+        const body = document.getElementById('activities-body');
+        if (!list || !list.length) { body.innerHTML = emptyBox('fa-clock-rotate-left', 'Chưa có hoạt động nào'); return; }
+        body.innerHTML = `<div class="act-list">` + list.map((a, i) =>
+            `<div class="act-item" style="animation-delay:${i*40}ms">
+                <div class="act-ic ic-${a.color}"><i class="fas ${a.icon}"></i></div>
+                <div><div class="act-txt">${esc(a.text)}</div><div class="act-time"><i class="far fa-clock me-1"></i>${esc(a.time_str)}</div></div>
+             </div>`).join('') + `</div>`;
+    }
+
+    function renderTables(d) {
+        // Top giảng viên
+        const tt = document.getElementById('tb-teachers');
+        tt.innerHTML = (d.topTeachers && d.topTeachers.length) ? d.topTeachers.map((t, i) =>
+            `<tr><td><span class="rank">${i+1}</span></td><td style="font-weight:600;color:#0f172a;">${esc(t.ho_ten)}</td>
+             <td class="num">${fmtInt(t.so_cau)}</td><td class="num">${fmtInt(t.so_de)}</td><td class="num">${fmtInt(t.so_phong)}</td></tr>`
+        ).join('') : emptyRow(5);
+
+        // Top học phần
+        const ts = document.getElementById('tb-subjects');
+        ts.innerHTML = (d.topSubjects && d.topSubjects.length) ? d.topSubjects.map((s, i) =>
+            `<tr><td><span class="rank">${i+1}</span></td>
+             <td style="font-weight:600;color:#0f172a;">${esc(s.ten)}<div style="font-size:.7rem;color:#94a3b8;">${esc(s.ma)}</div></td>
+             <td class="num">${fmtInt(s.tong)}</td>
+             <td class="num"><span class="chip-de">${fmtInt(s.de)}</span></td>
+             <td class="num"><span class="chip-tb">${fmtInt(s.tb)}</span></td>
+             <td class="num"><span class="chip-kho">${fmtInt(s.kho)}</span></td></tr>`
+        ).join('') : emptyRow(6);
+
+        // Phòng thi
+        const tr = document.getElementById('tb-rooms');
+        const rp = { dang_thi:['pill-open','Đang mở'], chuan_bi:['pill-prep','Sắp diễn ra'], da_dong:['pill-closed','Đã đóng'] };
+        tr.innerHTML = (d.activeExamRooms && d.activeExamRooms.length) ? d.activeExamRooms.map(r => {
+            const st = rp[r.trang_thai] || ['pill-closed', r.trang_thai];
+            return `<tr><td style="font-weight:600;color:#0f172a;">${esc(r.ten_phong)}<div style="font-size:.7rem;color:#94a3b8;">${esc(r.ma_phong)}</div></td>
+             <td>${esc(r.gv)}</td><td>${esc(r.bat_dau)}</td><td class="num">${fmtInt(r.so_ts)}</td>
+             <td><span class="pill ${st[0]}">${esc(st[1])}</span></td></tr>`;
+        }).join('') : emptyRow(5);
+
+        // AI
+        const ta = document.getElementById('tb-ai');
+        ta.innerHTML = (d.recentAI && d.recentAI.length) ? d.recentAI.map(a =>
+            `<tr><td style="font-weight:600;color:#0f172a;">${esc(a.nguoi_dung)}</td><td>${esc(a.hanh_dong)}</td>
+             <td class="num">${fmtInt(a.so_lan)}</td><td><span class="pill pill-ok">${esc(a.trang_thai)}</span></td>
+             <td>${esc(a.thoi_gian)}</td></tr>`
+        ).join('') : emptyRow(5);
+    }
+    const emptyRow = n => `<tr><td colspan="${n}"><div class="empty-state" style="padding:26px;"><i class="fas fa-inbox"></i><p>Chưa có dữ liệu</p></div></td></tr>`;
+    const emptyBox = (ic, msg) => `<div class="empty-state"><i class="fas ${ic}"></i><p>${msg}</p></div>`;
+
+    // ── Charts ──
+    const baseOpts = {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 700 },
+        plugins: { legend: { labels: { font: { size: 12, family:'Be Vietnam Pro' }, boxWidth: 13, padding: 12, color:'#475569' } },
+                   tooltip: { padding: 10, cornerRadius: 8, titleFont:{family:'Be Vietnam Pro'}, bodyFont:{family:'Be Vietnam Pro'} } },
+    };
+    const gridClr = '#eef2f7';
+    function axes(step) {
+        return { x: { grid:{ display:false }, ticks:{ font:{size:11}, color:'#64748b' } },
+                 y: { beginAtZero:true, grid:{ color:gridClr }, ticks:{ font:{size:11}, color:'#64748b', precision:0, stepSize: step } } };
+    }
+    // hiện/ẩn overlay "Chưa có dữ liệu"
+    function toggleEmpty(canvasId, hasData) {
+        const wrap = document.getElementById(canvasId).closest('.chart-canvas-wrap');
+        const ov = wrap.querySelector('.chart-empty');
+        ov.hidden = hasData;
+        document.getElementById(canvasId).style.opacity = hasData ? 1 : 0;
+    }
+    function mk(id, cfg, hasData) {
+        toggleEmpty(id, hasData);
+        if (charts[id]) charts[id].destroy();
+        if (!hasData) { charts[id] = null; return; }
+        charts[id] = new Chart(document.getElementById(id), cfg);
+    }
+    const sum = a => (a || []).reduce((x, y) => x + y, 0);
+
+    function renderCharts(c) {
+        // 1. Tăng trưởng người dùng (line)
+        mk('c-userGrowth', {
+            type: 'line',
+            data: { labels: c.userGrowthByMonth.labels, datasets: [{ label:'Người dùng mới', data:c.userGrowthByMonth.data,
+                borderColor:PAL.blue, backgroundColor:PAL.blue+'22', borderWidth:2.5, pointRadius:4,
+                pointBackgroundColor:PAL.blue, fill:true, tension:.35 }] },
+            options: { ...baseOpts, plugins:{...baseOpts.plugins, legend:{display:false}}, scales: axes() }
+        }, sum(c.userGrowthByMonth.data) > 0);
+
+        // 2. Phân bố điểm (bar - sequential blue)
+        const scoreRamp = ['#86b6ef','#5598e7','#3987e5','#256abf','#184f95'];
+        mk('c-score', {
+            type:'bar',
+            data:{ labels:c.scoreDistribution.labels, datasets:[{ label:'Số bài', data:c.scoreDistribution.data,
+                backgroundColor:scoreRamp, borderRadius:6, borderSkipped:false, maxBarThickness:54 }] },
+            options:{ ...baseOpts, plugins:{...baseOpts.plugins, legend:{display:false}}, scales: axes(1) }
+        }, sum(c.scoreDistribution.data) > 0);
+
+        // 2b. Điểm trung bình theo lớp (bar) — thang điểm 0..10
+        const sbc = c.scoreByClass || { labels:[], data:[], counts:[] };
+        mk('c-scoreByClass', {
+            type:'bar',
+            data:{ labels:sbc.labels, datasets:[{ label:'Điểm TB', data:sbc.data,
+                backgroundColor:PAL.cyan+'cc', borderRadius:6, borderSkipped:false, maxBarThickness:56 }] },
+            options:{ ...baseOpts,
+                plugins:{ ...baseOpts.plugins, legend:{display:false},
+                    tooltip:{ ...baseOpts.plugins.tooltip, callbacks:{
+                        label: ctx => `Điểm TB: ${fmtFloat(ctx.parsed.y)} (${(sbc.counts||[])[ctx.dataIndex]||0} bài)` } } },
+                scales:{ x:{ grid:{display:false}, ticks:{font:{size:11},color:'#64748b'} },
+                         y:{ beginAtZero:true, max:10, grid:{color:gridClr}, ticks:{font:{size:11},color:'#64748b',stepSize:2} } } }
+        }, (sbc.data || []).length > 0);
+
+        // 3. Lượt AI theo ngày (bar)
+        mk('c-aiUsage', {
+            type:'bar',
+            data:{ labels:c.aiUsageByDate.labels, datasets:[{ label:'Lượt gọi AI', data:c.aiUsageByDate.data,
+                backgroundColor:PAL.amber+'cc', borderRadius:5, borderSkipped:false, maxBarThickness:38 }] },
+            options:{ ...baseOpts, plugins:{...baseOpts.plugins, legend:{display:false}}, scales: axes(1) }
+        }, sum(c.aiUsageByDate.data) > 0);
+
+        // 4. Độ khó (doughnut - status/severity, có chú thích)
+        mk('c-difficulty', {
+            type:'doughnut',
+            data:{ labels:c.questionsByDifficulty.labels, datasets:[{ data:c.questionsByDifficulty.data,
+                backgroundColor:[PAL.green, PAL.amber, PAL.red], borderColor:'#fff', borderWidth:2 }] },
+            options:{ ...baseOpts, cutout:'62%', plugins:{...baseOpts.plugins, legend:{position:'bottom'}} }
+        }, sum(c.questionsByDifficulty.data) > 0);
+
+        // 5. Câu hỏi theo chương (bar)
+        mk('c-qChapter', {
+            type:'bar',
+            data:{ labels:c.questionsByChapter.labels, datasets:[{ label:'Số câu hỏi', data:c.questionsByChapter.data,
+                backgroundColor:PAL.purple+'cc', borderRadius:6, borderSkipped:false, maxBarThickness:44 }] },
+            options:{ ...baseOpts, plugins:{...baseOpts.plugins, legend:{display:false}}, scales: axes(1) }
+        }, sum(c.questionsByChapter.data) > 0);
+
+        // 6. Top học phần nhiều câu hỏi (bar ngang) — lấy từ bảng topSubjects (đã có ở stats) → dùng chart riêng
+        // (dữ liệu nạp trong loadAll qua statsData; xử lý bên dưới)
+        renderTopSubjectChart();
+
+        // 7. Đề thi theo tháng (bar)
+        mk('c-examMonth', {
+            type:'bar',
+            data:{ labels:c.examsByMonth.labels, datasets:[{ label:'Đề thi', data:c.examsByMonth.data,
+                backgroundColor:PAL.blue+'cc', borderRadius:6, borderSkipped:false, maxBarThickness:46 }] },
+            options:{ ...baseOpts, plugins:{...baseOpts.plugins, legend:{display:false}}, scales: axes(1) }
+        }, sum(c.examsByMonth.data) > 0);
+
+        // 8. Trạng thái phòng thi (doughnut)
+        mk('c-roomStatus', {
+            type:'doughnut',
+            data:{ labels:c.examRoomStatus.labels, datasets:[{ data:c.examRoomStatus.data,
+                backgroundColor:[PAL.green, PAL.amber, PAL.slate], borderColor:'#fff', borderWidth:2 }] },
+            options:{ ...baseOpts, cutout:'62%', plugins:{...baseOpts.plugins, legend:{position:'bottom'}} }
+        }, sum(c.examRoomStatus.data) > 0);
+    }
+
+    let statsData = null;
+    function renderTopSubjectChart() {
+        const subs = (statsData && statsData.topSubjects) || [];
+        const labels = subs.map(s => s.ma || s.ten);
+        const data = subs.map(s => s.tong);
+        mk('c-topSubject', {
+            type:'bar',
+            data:{ labels, datasets:[{ label:'Câu hỏi', data,
+                backgroundColor:PAL.cyan+'cc', borderRadius:6, borderSkipped:false }] },
+            options:{ ...baseOpts, indexAxis:'y', plugins:{...baseOpts.plugins, legend:{display:false}},
+                scales:{ x:{ beginAtZero:true, grid:{color:gridClr}, ticks:{font:{size:11},color:'#64748b',precision:0} },
+                         y:{ grid:{display:false}, ticks:{font:{size:11},color:'#64748b'} } } }
+        }, sum(data) > 0);
+    }
+
+    // ── 5 SƠ ĐỒ TRỌNG TÂM ──
+    function renderFocusCharts(c, stats) {
+        // 1) Đề thi theo học phần (bar) — học phần nào tạo nhiều đề nhất
+        const es = c.examsBySubject || { labels: [], names: [], data: [] };
+        mk('c-examSubject', {
+            type:'bar',
+            data:{ labels:es.labels, datasets:[{ label:'Số đề thi', data:es.data,
+                backgroundColor:PAL.blue+'cc', borderRadius:6, borderSkipped:false, maxBarThickness:56 }] },
+            options:{ ...baseOpts,
+                plugins:{ ...baseOpts.plugins, legend:{display:false},
+                    tooltip:{ ...baseOpts.plugins.tooltip, callbacks:{ title: it => (es.names||[])[it[0].dataIndex] || it[0].label } } },
+                scales: axes(1) }
+        }, sum(es.data) > 0);
+
+        // 2) Phân bố độ khó ngân hàng câu hỏi (donut)
+        mk('c-difficulty', {
+            type:'doughnut',
+            data:{ labels:c.questionsByDifficulty.labels, datasets:[{ data:c.questionsByDifficulty.data,
+                backgroundColor:[PAL.green, PAL.amber, PAL.red], borderColor:'#fff', borderWidth:2 }] },
+            options:{ ...baseOpts, cutout:'60%', plugins:{...baseOpts.plugins, legend:{position:'bottom'}} }
+        }, sum(c.questionsByDifficulty.data) > 0);
+
+        // 3) Top 5 học phần nhiều câu hỏi nhất (bar ngang)
+        const subs = ((stats && stats.topSubjects) || []).filter(s => s.tong > 0).slice(0, 5);
+        mk('c-topSubjects', {
+            type:'bar',
+            data:{ labels: subs.map(s => s.ma || s.ten),
+                   datasets:[{ label:'Số câu hỏi', data: subs.map(s => s.tong),
+                       backgroundColor:PAL.cyan+'cc', borderRadius:6, borderSkipped:false,
+                       barThickness:25, maxBarThickness:30 }] },   /* cột gọn, không phình to theo chiều cao ô */
+            options:{ ...baseOpts, indexAxis:'y',
+                plugins:{ ...baseOpts.plugins, legend:{display:false},
+                    tooltip:{ ...baseOpts.plugins.tooltip, callbacks:{ title: it => subs[it[0].dataIndex].ten } } },
+                scales:{ x:{ beginAtZero:true, grid:{color:gridClr}, ticks:{font:{size:11},color:'#64748b',precision:0} },
+                         y:{ grid:{display:false}, ticks:{font:{size:11},color:'#64748b'} } } }
+        }, subs.length > 0);
+
+        // 4) Đề thi tạo theo tháng (bar)
+        mk('c-examMonth', {
+            type:'bar',
+            data:{ labels:c.examsByMonth.labels, datasets:[{ label:'Đề thi', data:c.examsByMonth.data,
+                backgroundColor:PAL.purple+'cc', borderRadius:6, borderSkipped:false, maxBarThickness:46 }] },
+            options:{ ...baseOpts, plugins:{...baseOpts.plugins, legend:{display:false}}, scales: axes(1) }
+        }, sum(c.examsByMonth.data) > 0);
+
+        // 5) Trạng thái phòng thi (donut)
+        mk('c-roomStatus', {
+            type:'doughnut',
+            data:{ labels:c.examRoomStatus.labels, datasets:[{ data:c.examRoomStatus.data,
+                backgroundColor:[PAL.green, PAL.amber, PAL.slate], borderColor:'#fff', borderWidth:2 }] },
+            options:{ ...baseOpts, cutout:'60%', plugins:{...baseOpts.plugins, legend:{position:'bottom'}} }
+        }, sum(c.examRoomStatus.data) > 0);
+    }
+
+    function revealCharts() {
+        document.querySelectorAll('#tab-thong-ke .chart-card').forEach((el, i) =>
+            setTimeout(() => el.classList.add('in'), 80 * i));
+    }
+
+    function showError(where, msg) {
+        const html = `<div class="dash-state err"><i class="fas fa-circle-exclamation" style="font-size:1.5rem;"></i>
+            <div style="margin-top:8px;font-weight:600;">Không tải được dữ liệu</div>
+            <div style="font-size:.78rem;">${esc(msg)}</div></div>`;
+        where.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = html; });
+    }
+
+    async function loadAll() {
+        if (inFlight) return;
+        inFlight = true;
+        const q = filters();
+        const btn = document.getElementById('btn-refresh');
+        btn.classList.add('spinning');
+        try {
+            // Chạy song song 3 nhóm API
+            const [stats, chartsD, feed, alerts] = await Promise.all([
+                getJSON('/admin/dashboard/stats?' + q),
+                getJSON('/admin/dashboard/charts?' + q),
+                getJSON('/admin/dashboard/recent-activities?' + q),
+                getJSON('/admin/dashboard/alerts?' + q),
+            ]);
+            statsData = stats;
+            renderKPIs(stats);
+            renderOverviewLists(stats, chartsD);   // dùng scoreByClass + aiUsageByUser
+            renderActivities(feed.recentActivities);
+            renderAlerts(alerts.alerts);
+            renderFocusCharts(chartsD, stats);     // 5 sơ đồ trọng tâm
+            revealCharts();
+            loaded = true;
+        } catch (e) {
+            showError(['kpi-groups', 'ov-score-class', 'ov-ai-user', 'alerts-body', 'activities-body'], e.message || 'Lỗi kết nối máy chủ');
+        } finally {
+            btn.classList.remove('spinning');
+            inFlight = false;
+        }
+    }
+
+    return {
+        ensureLoaded() { if (!loaded && !inFlight) loadAll(); },
+        reload() { loadAll(); },
+    };
+})();
+
+// Nút bộ lọc
+document.getElementById('btn-refresh').addEventListener('click', () => Dashboard.reload());
+document.getElementById('f-range').addEventListener('change', () => Dashboard.reload());
+
+// Nạp dashboard nếu tab Thống kê đang mở (mặc định)
+if (document.querySelector('.adm-tab-btn[data-target="thong-ke"]').classList.contains('active'))
+    Dashboard.ensureLoaded();
+
+// ── Confirm delete modal ──
+function confirmDelete(url, title, msg) {
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMsg').innerHTML = msg;
+    document.getElementById('confirmForm').action = url;
+    document.getElementById('confirmModal').classList.add('show');
+}
+function closeConfirm() { document.getElementById('confirmModal').classList.remove('show'); }
+document.getElementById('confirmModal').addEventListener('click', function (e) {
+    if (e.target === this) closeConfirm();
+});
+</script>
+{% endblock %}

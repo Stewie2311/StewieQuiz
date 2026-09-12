@@ -1,0 +1,79 @@
+{#
+  hoc_sinh_home.html — Trang chủ rút gọn cho học sinh.
+#}
+{% extends 'base.html' %}
+{% block title %}Trang chủ Học sinh - Khoa TT-TT{% endblock %}
+{% block extra_css %}
+<style>
+    .join-box {
+        background: #ffffff; border: 1px solid var(--border, #dbe6f3);
+        border-radius: 20px; padding: 40px; text-align: center; max-width: 600px;
+        margin: 0 auto 50px auto; box-shadow: 0 10px 30px rgba(37,99,235,0.08);
+    }
+    .join-input {
+        background: #ffffff !important; border: 2px solid rgba(37,99,235,0.3) !important;
+        color: #0f172a !important; -webkit-text-fill-color: #0f172a; color-scheme: light;
+        font-size: 1.5rem; text-align: center; font-weight: bold;
+        letter-spacing: 2px; padding: 15px; border-radius: 15px;
+    }
+    .join-input::placeholder { color: #94a3b8 !important; font-weight: 600; letter-spacing: 1px; }
+    .join-input:focus { border-color: #2563eb !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.15) !important; }
+    .room-card {
+        background: #ffffff; border: 1px solid var(--border, #dbe6f3);
+        border-radius: 16px; padding: 20px; transition: all 0.3s; height: 100%; display: flex; flex-direction: column;
+        box-shadow: 0 1px 2px rgba(20,35,59,0.06);
+    }
+    .room-card:hover { transform: translateY(-5px); border-color: rgba(37,99,235,0.35); box-shadow: 0 10px 20px rgba(37,99,235,0.12); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width: 1100px;">
+    <div class="join-box">
+        <h3 class="fw-bold mb-3" style="color: #2563eb;"><i class="fas fa-gamepad me-2"></i>Tham Gia Bài Thi</h3>
+        <p class="text-muted mb-4">Nhập mã phòng do giáo viên cung cấp để bắt đầu</p>
+        <form action="#" id="joinForm" onsubmit="joinRoom(event)">
+            <div class="input-group mb-4">
+                <input type="text" id="roomCode" class="form-control join-input" placeholder="VD: STEWIE-XXXX" required autocomplete="off">
+            </div>
+            <button type="submit" class="btn w-100 py-3 fw-bold" style="background: linear-gradient(135deg, #11998e, #38ef7d); color: #000; border-radius: 12px; text-transform: uppercase;">
+                <i class="fas fa-sign-in-alt me-2"></i> Vào Phòng Ngay
+            </button>
+        </form>
+    </div>
+
+    <h4 class="fw-bold text-dark mb-4"><i class="fas fa-list-ul me-2" style="color: #2563eb;"></i>Các phòng thi đang mở</h4>
+    <div class="row g-4">
+        {% if phong_dang_mo %}
+            {% for p in phong_dang_mo %}
+            <div class="col-md-4">
+                <div class="room-card">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h5 class="fw-bold mb-0" style="line-height: 1.4; color: #14233b;">{{ p.ten_phong }}</h5>
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success ms-2">Mở</span>
+                    </div>
+                    <div class="text-muted small mb-4 flex-grow-1">
+                        <div class="mb-2"><i class="fas fa-book me-2 text-warning"></i>Môn: <strong class="text-dark">{{ p.ten_mon }}</strong></div>
+                        <div class="mb-2"><i class="fas fa-user-tie me-2 text-info"></i>GV: <strong class="text-dark">{{ p.ten_gv }}</strong></div>
+                        <div class="mb-2"><i class="fas fa-door-open me-2 text-primary"></i>Mở lúc: <strong class="text-dark">{{ p.thoi_gian_mo_phong_str }}</strong></div>
+                        <div><i class="fas fa-hourglass-half me-2 text-danger"></i>Thời lượng: <strong class="text-dark">{{ p.thoi_luong_lam_bai }} phút</strong></div>
+                    </div>
+                    <a href="/thi/{{ p.ma_phong }}" class="btn btn-outline-primary w-100" style="border-radius: 10px;">Vào phòng này</a>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12 text-center py-5" style="background: #f8fafc; border-radius: 16px; border: 1px dashed var(--border, #dbe6f3);">
+                <i class="fas fa-box-open fs-1 text-muted mb-3 opacity-50"></i>
+                <h5 class="text-muted">Hiện tại chưa có phòng thi nào.</h5>
+            </div>
+        {% endif %}
+    </div>
+</div>
+<script>
+    function joinRoom(e) {
+        e.preventDefault();
+        const code = document.getElementById('roomCode').value.trim();
+        if(code) window.location.href = '/thi/' + code;
+    }
+</script>
+{% endblock %}

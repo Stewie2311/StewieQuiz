@@ -1,0 +1,94 @@
+{#
+  ngan_hang.html — TRANG NGÂN HÀNG CÂU HỎI (kho chung của cả trường).
+
+  Đi theo 2 cấp: chọn môn trước, rồi mới hiện câu hỏi trong môn đó. Kho có hàng
+  chục nghìn câu, đổ hết ra một lượt là treo trang.
+
+  Phần ruột nằm ở ngan_hang_inner.html, để tab Thư viện nạp lại bằng AJAX được
+  mà không phải tải cả trang.
+#}
+{% extends "base.html" %}
+
+{% block title %}Ngân hàng câu hỏi - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Hiệu ứng vào trang Thư viện chung — đồng nhất với hiệu ứng chuyển tab
+       (tabSwitch khai báo trong animations.css) để cảm giác mượt như nhau. */
+    .nh-enter { animation: tabSwitch 0.32s cubic-bezier(0.16, 1, 0.3, 1); }
+
+    /* Thanh chuyển 3 mục Thư viện (đồng bộ với library-section.html) */
+    .lib-subtab { display: flex; gap: 10px; border-bottom: 1px solid var(--border);
+        padding-bottom: 8px; margin-bottom: 12px; }
+    .lib-subtab-btn { display: inline-flex; align-items: center; gap: 8px;
+        padding: 10px 20px; border: 1px solid var(--border); background: var(--surface);
+        font-weight: 600; font-size: 0.9rem; color: var(--text-muted); cursor: pointer;
+        text-decoration: none; transition: all 0.3s var(--ease); }
+    .lib-subtab-btn:hover { color: var(--primary-dark); background: var(--primary-softer); }
+    .lib-subtab-btn.active { background: var(--primary-soft); color: var(--primary-dark);
+        border-color: rgba(37,99,235,0.3); }
+
+    /* Card câu hỏi / bộ lọc / badge... -> đã chuyển sang static/css/ngan_hang.css (dùng chung với pane trong Thư viện) */
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="nh-enter content-narrow">
+
+    <!-- Thanh chuyển giữa 3 mục Thư viện (đồng bộ 2 trang kia) -->
+    <div class="lib-subtab">
+        <a href="/?tab=library&sub=cauhoi" class="lib-subtab-btn">
+            <i class="fas fa-layer-group"></i> Câu hỏi của tôi
+        </a>
+        <span class="lib-subtab-btn active">
+            <i class="fas fa-share-alt"></i> Ngân hàng câu hỏi
+        </span>
+        <a href="/?tab=library&sub=dethi" class="lib-subtab-btn">
+            <i class="fas fa-file-lines"></i> Đề thi
+        </a>
+    </div>
+
+    {% include 'ngan_hang_inner.html' %}
+
+</div>
+
+<script>
+// Xóa 1 câu khỏi ngân hàng chung (chỉ người đóng góp hoặc admin thấy nút này;
+// quyền thật được kiểm tra lại ở server). CSRF được flash.js tự gắn vào fetch.
+function xoaKhoiNganHang(cauId, btn){
+    if (!confirm('Xóa câu hỏi này khỏi Ngân hàng chung?\nCâu hỏi gốc trong thư viện cá nhân (nếu còn) không bị ảnh hưởng.')) return;
+    btn.disabled = true;
+    fetch('/xoa_khoi_ngan_hang/' + cauId, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success){
+                const card = btn.closest('.q-card');
+                card.style.transition = 'opacity 0.25s, transform 0.25s';
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(-6px)';
+                setTimeout(() => card.remove(), 250);
+                if (window.showToast) showToast('Đã xóa câu hỏi khỏi ngân hàng chung.', 'success');
+            } else {
+                btn.disabled = false;
+                if (window.showToast) showToast(data.message || 'Không xóa được!', 'danger');
+                else alert(data.message || 'Không xóa được!');
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            if (window.showToast) showToast('Lỗi kết nối, vui lòng thử lại.', 'danger');
+        });
+}
+
+// Lọc danh sách MÔN theo tên (mức 1 — trang độc lập)
+function filterNhMon(){
+    var kw = (document.getElementById('nhMonSearch').value || '').toLowerCase().trim();
+    document.querySelectorAll('#nhMonTableBody tr[data-mon]').forEach(function(tr){
+        var mon = (tr.getAttribute('data-mon') || '').toLowerCase();
+        tr.style.display = mon.indexOf(kw) > -1 ? '' : 'none';
+    });
+}
+
+// (Đã bỏ click cả dòng — xem chi tiết môn bằng nút "Xem" ở cột Thao tác.)
+</script>
+{% endblock %}

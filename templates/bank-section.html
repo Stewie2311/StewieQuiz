@@ -1,0 +1,73 @@
+{#
+  bank-section.html — Khung rỗng của tab "Ngân hàng câu hỏi" trong Thư viện.
+  Nội dung thật được nạp bằng AJAX từ /ngan_hang?partial=1 khi người dùng mở tab.
+#}
+<!-- TAB: BANK (NGÂN HÀNG CÂU HỎI) -->
+<div class="tab-pane" id="bank-tab">
+    <div class="bank-section">
+        <div class="section-header">
+            <h2><i class="fas fa-database me-2"></i>Ngân Hàng Câu Hỏi</h2>
+            <p>Kho câu hỏi chung - chia sẻ giữa tất cả giáo viên</p>
+        </div>
+
+        <div class="bank-info-box">
+            <div class="info-item">
+                <i class="fas fa-database"></i>
+                <div>
+                    <h4>Ngân hàng câu hỏi</h4>
+                    <p>Tất cả giáo viên có thể xem và đóng góp câu hỏi. Hệ thống tự động phát hiện câu hỏi trùng lặp.</p>
+                </div>
+            </div>
+            <a href="#" class="btn-bank-view" onclick="loadBankModal(); return false;">
+                <i class="fas fa-eye"></i> Xem Ngân hàng
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+.bank-section { animation: fadeInUp 0.4s ease-out; max-width: var(--content-narrow); margin: 0 auto; }
+.bank-info-box {
+    background: var(--primary-softer);
+    border: 1px solid rgba(37,99,235,0.2);
+    border-radius: var(--radius-lg);
+    padding: var(--card-pad);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--gap);
+    box-shadow: var(--shadow-sm);
+}
+.info-item { display: flex; align-items: flex-start; gap: 15px; flex: 1; }
+.info-item i { font-size: 2.2rem; color: var(--primary); margin-top: 3px; }
+.info-item h4 { font-weight: 700; color: var(--text-primary); margin-bottom: 4px; font-size: 1.05rem; }
+.info-item p { color: var(--text-muted); font-size: 0.9rem; margin: 0; }
+.btn-bank-view {
+    background: var(--grad-primary);
+    color: #fff;
+    padding: 11px 24px;
+    border-radius: 10px;
+    font-weight: 700;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s var(--ease);
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.btn-bank-view:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-primary);
+    color: #fff;
+}
+</style>
+
+<script>
+function loadBankModal() {
+    const modal = new bootstrap.Modal(document.getElementById('bankModal'));
+    modal.show();
+    // Load bank data here
+}
+</script>

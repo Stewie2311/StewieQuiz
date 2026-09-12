@@ -1,0 +1,51 @@
+# Environment variables và khóa bí mật
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+.pytest_cache/
+.mypy_cache/
+
+# Node.js
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dữ liệu người dùng tải lên
+uploads/
+
+# Ảnh đại diện người dùng
+static/avatars/*
+!static/avatars/.gitkeep
+
+# Database cục bộ
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# Log và file tạm
+logs/
+*.log
+*.tmp
+tempCodeRunnerFile.py
+
+# Hệ điều hành
+.DS_Store
+Thumbs.db

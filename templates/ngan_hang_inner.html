@@ -1,0 +1,242 @@
+{# Partial: Ngân hàng câu hỏi — 2 MỨC (giống cấu trúc "Câu hỏi của tôi"):
+   • Chưa chọn môn          -> BẢNG danh sách MÔN + ô đếm "Số môn" + tìm tên môn.
+   • Đã chọn (?mon_hoc_id)  -> CHI TIẾT môn: lọc chương/độ khó + tìm nội dung + thẻ câu hỏi.
+   Dùng chung cho /ngan_hang (full) lẫn pane Thư viện (nạp AJAX ?partial=1).
+   CSS ở ngan_hang.css; JS (điều hướng/tìm) ở nơi nhúng. #}
+
+{% if not mon_filter %}
+{# ============ MỨC 1: DANH SÁCH MÔN (panel thống kê + bảng modern) ============ #}
+{# Thông số biểu đồ TRÒN (donut) độ khó — giống "Câu hỏi của tôi" #}
+{% set nh_de  = stats.so_de  %}
+{% set nh_tb  = stats.so_tb  %}
+{% set nh_kho = stats.so_kho %}
+{% set nh_total = nh_de + nh_tb + nh_kho %}
+{% set nh_dkmax = [nh_de, nh_tb, nh_kho, 1]|max %}
+{% set C = 264 %}
+{% set nh_de_len  = (nh_de  * C / nh_total) if nh_total else 0 %}
+{% set nh_tb_len  = (nh_tb  * C / nh_total) if nh_total else 0 %}
+{% set nh_kho_len = (nh_kho * C / nh_total) if nh_total else 0 %}
+{% set nh_tb_rot  = (-90 + nh_de * 360 / nh_total) if nh_total else -90 %}
+{% set nh_kho_rot = (-90 + (nh_de + nh_tb) * 360 / nh_total) if nh_total else -90 %}
+
+
+<div class="lib-split">
+    <!-- ===== Panel thống kê ngân hàng (trái) ===== -->
+    <aside class="lib-stats animate">
+        <div class="lst-nums">
+            <div class="lst-num"><b class="count-up" data-to="{{ stats.so_mon }}">{{ stats.so_mon }}</b><span>Môn học</span></div>
+            <div class="lst-num"><b class="count-up" data-to="{{ stats.tong }}">{{ stats.tong }}</b><span>Tổng câu</span></div>
+        </div>
+
+        <div class="lst-donut-wrap">
+            <svg class="lst-donut" viewBox="0 0 100 100">
+                <circle class="lst-donut-track" cx="50" cy="50" r="42"></circle>
+                {% if nh_total %}
+                <circle class="lst-seg seg-de" cx="50" cy="50" r="42"
+                        style="--len: {{ nh_de_len|round(2) }}; stroke-dasharray: {{ nh_de_len|round(2) }} 999; transform: rotate(-90deg); animation-delay: .05s"></circle>
+                <circle class="lst-seg seg-tb" cx="50" cy="50" r="42"
+                        style="--len: {{ nh_tb_len|round(2) }}; stroke-dasharray: {{ nh_tb_len|round(2) }} 999; transform: rotate({{ nh_tb_rot|round(2) }}deg); animation-delay: .25s"></circle>
+                <circle class="lst-seg seg-kho" cx="50" cy="50" r="42"
+                        style="--len: {{ nh_kho_len|round(2) }}; stroke-dasharray: {{ nh_kho_len|round(2) }} 999; transform: rotate({{ nh_kho_rot|round(2) }}deg); animation-delay: .45s"></circle>
+                {% endif %}
+                <text class="lst-donut-num count-up" data-to="{{ nh_total }}" x="50" y="49">{{ nh_total }}</text>
+                <text class="lst-donut-cap" x="50" y="63">câu hỏi</text>
+            </svg>
+        </div>
+
+        <div class="lst-sub">Phân bố độ khó</div>
+        <div class="lst-bars">
+            <div class="lst-bar">
+                <span class="lst-bar-name dk-de-t">Dễ</span>
+                <span class="lst-track"><span class="lst-fill dk-de" style="--w: {{ (nh_de * 100 / nh_dkmax)|int }}%; animation-delay:.1s"></span></span>
+                <span class="lst-bar-val">{{ nh_de }}</span>
+            </div>
+            <div class="lst-bar">
+                <span class="lst-bar-name dk-tb-t">TB</span>
+                <span class="lst-track"><span class="lst-fill dk-tb" style="--w: {{ (nh_tb * 100 / nh_dkmax)|int }}%; animation-delay:.25s"></span></span>
+                <span class="lst-bar-val">{{ nh_tb }}</span>
+            </div>
+            <div class="lst-bar">
+                <span class="lst-bar-name dk-kho-t">Khó</span>
+                <span class="lst-track"><span class="lst-fill dk-kho" style="--w: {{ (nh_kho * 100 / nh_dkmax)|int }}%; animation-delay:.4s"></span></span>
+                <span class="lst-bar-val">{{ nh_kho }}</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ===== Bảng danh sách môn (phải) — auto-fit ===== -->
+    <div class="table-wrapper nh-mon-table lib-table-wrap" style="overflow-x:auto;">
+        <table class="data-table nh-mon-clickable lib-table-modern lib-table-fit">
+            <thead>
+                <tr>
+                    <th><i class="fas fa-book"></i> Môn học</th>
+                    <th class="text-center"><i class="fas fa-hashtag"></i> Số câu</th>
+                    <th class="text-center"><i class="fas fa-layer-group"></i> Số chương</th>
+                    <th class="text-center"><i class="fas fa-user-edit"></i> Đóng góp</th>
+                    <th class="text-center" style="width:1%;"><i class="fas fa-gear"></i> Thao tác</th>
+                </tr>
+            </thead>
+            <tbody id="nhMonTableBody">
+                {% set mon_co_cau = mon_hocs|selectattr('so_cau_ngan_hang')|list %}
+                {% for m in mon_co_cau %}
+                <tr data-mon="{{ m.ten_mon }}">
+                    <td class="col-primary">{{ m.ten_mon }}</td>
+                    <td class="text-center"><span class="badge-count">{{ m.so_cau_ngan_hang }}</span></td>
+                    <td class="text-center">{{ m.nh_chuong or 0 }}</td>
+                    <td class="text-center"><i class="fas fa-user-edit me-1" style="color:var(--text-muted);"></i>{{ m.nh_nguoi or 0 }}</td>
+                    <td class="text-center">
+                        <div class="tbl-actions center">
+                            <a href="/ngan_hang?mon_hoc_id={{ m.id }}" class="btn-act btn-view icon-only"
+                               data-tip="Xem câu hỏi" title="Xem câu hỏi của môn này" aria-label="Xem câu hỏi">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <a href="/ngan_hang/excel?mon_hoc_id={{ m.id }}" class="btn-act btn-excel icon-only"
+                               data-tip="Tải Excel" title="Tải Excel câu hỏi của môn này" aria-label="Tải Excel">
+                                <i class="fas fa-file-excel"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not mon_co_cau %}
+                <tr>
+                    <td colspan="5" style="text-align:center; padding:60px 20px; color:var(--text-muted);">
+                        <i class="fas fa-inbox" style="font-size:3rem; margin-bottom:15px; opacity:.5; display:block;"></i>
+                        <h5 style="color:var(--text-secondary); margin-bottom:5px;">Ngân hàng chưa có câu hỏi</h5>
+                        <p style="font-size:.9rem;">Hãy thêm câu hỏi vào ngân hàng từ tab "Câu hỏi của tôi".</p>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+        {% if total_pages > 1 %}
+        <div class="lib-pagination">
+            {% if page > 1 %}
+            <a class="page-btn" href="/ngan_hang?partial=1&page={{ page - 1 }}" onclick="return taiNganHangClick(this)">&laquo;</a>
+            {% else %}
+            <span class="page-btn disabled">&laquo;</span>
+            {% endif %}
+
+            {% set start_p = [1, page - 2]|max %}
+            {% set end_p = [total_pages, page + 2]|min %}
+            {% if start_p > 1 %}
+            <a class="page-btn" href="/ngan_hang?partial=1&page=1" onclick="return taiNganHangClick(this)">1</a>
+            {% if start_p > 2 %}<span class="page-info">...</span>{% endif %}
+            {% endif %}
+            {% for p in range(start_p, end_p + 1) %}
+            <a class="page-btn{% if p == page %} active{% endif %}" href="/ngan_hang?partial=1&page={{ p }}" onclick="return taiNganHangClick(this)">{{ p }}</a>
+            {% endfor %}
+            {% if end_p < total_pages %}
+            {% if end_p < total_pages - 1 %}<span class="page-info">...</span>{% endif %}
+            <a class="page-btn" href="/ngan_hang?partial=1&page={{ total_pages }}" onclick="return taiNganHangClick(this)">{{ total_pages }}</a>
+            {% endif %}
+
+            {% if page < total_pages %}
+            <a class="page-btn" href="/ngan_hang?partial=1&page={{ page + 1 }}" onclick="return taiNganHangClick(this)">&raquo;</a>
+            {% else %}
+            <span class="page-btn disabled">&raquo;</span>
+            {% endif %}
+            <span class="page-info">{{ page }} / {{ total_pages }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% else %}
+{# ============ MỨC 2: CHI TIẾT MÔN ============ #}
+{% set mon_obj = (mon_hocs|selectattr('id','equalto', mon_filter|int)|first) %}
+<div class="lib-filter-bar">
+    <form method="GET" action="/ngan_hang" class="nh-filter-form">
+        <input type="hidden" name="mon_hoc_id" value="{{ mon_filter }}">
+        <div class="nh-field">
+            <label class="form-label-dark small">Môn học</label>
+            <div class="form-control-dark lib-so-mon">
+                <i class="fas fa-book"></i> {{ mon_obj.ten_mon if mon_obj else 'Môn học' }}
+            </div>
+        </div>
+        <div class="nh-field">
+            <label class="form-label-dark small">Số câu</label>
+            <div class="form-control-dark lib-so-mon">
+                <i class="fas fa-list-check"></i> {{ cau_hois|length }}
+            </div>
+        </div>
+        <div class="nh-field nh-field-sm" style="margin-left:auto;">
+            <label class="form-label-dark small">Chương</label>
+            <select name="chuong" class="form-control-dark">
+                <option value="">Tất cả</option>
+                {% for c in chuong_list %}
+                <option value="{{ c }}" {% if chuong_filter == c|string %}selected{% endif %}>Chương {{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="nh-field nh-field-xs">
+            <label class="form-label-dark small">Độ khó</label>
+            <select name="do_kho" class="form-control-dark">
+                <option value="">Tất cả</option>
+                <option value="Dễ" {% if do_kho_filter == 'Dễ' %}selected{% endif %}>Dễ</option>
+                <option value="Trung bình" {% if do_kho_filter == 'Trung bình' %}selected{% endif %}>Trung bình</option>
+                <option value="Khó" {% if do_kho_filter == 'Khó' %}selected{% endif %}>Khó</option>
+            </select>
+        </div>
+        {# Tìm nội dung: chỉ icon kính lúp, CLICK mới chạy dài ra (checkbox hack). #}
+        <div class="nh-search">
+            <input type="checkbox" id="nhSearchChk" class="nh-search-chk" {% if search %}checked{% endif %}>
+            <label for="nhSearchChk" class="nh-search-icon" title="Tìm kiếm nội dung"><i class="fas fa-search"></i></label>
+            <input type="text" name="search" class="nh-search-input" placeholder="Tìm nội dung..." value="{{ search }}">
+        </div>
+        <button type="submit" class="nh-filter-btn"><i class="fas fa-filter me-1"></i> Lọc</button>
+    </form>
+</div>
+
+{% if cau_hois %}
+    {% for q in cau_hois %}
+    <div class="q-card">
+        <div class="q-card-header">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge-chuong"><i class="fas fa-book me-1"></i>{{ q.ten_mon }}</span>
+                {% if q.chuong %}<span class="badge-chuong">Chương {{ q.chuong }}</span>{% endif %}
+
+                {% if q.do_kho == 'Dễ' %} <span class="badge-de">Dễ</span>
+                {% elif q.do_kho == 'Trung bình' %} <span class="badge-tb">Trung bình</span>
+                {% else %} <span class="badge-kho">Khó</span> {% endif %}
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <div class="text-muted small">
+                    <i class="fas fa-user-edit me-1"></i> Đóng góp: <strong>{{ q.ten_gv }}</strong>
+                </div>
+                {% if q.nguon == 'ngan_hang' and (session.get('role') == 'admin' or q.nguoi_tao_id == session.get('user_id')) %}
+                <button type="button" class="btn-xoa-nh" title="Xóa câu này khỏi ngân hàng chung"
+                        onclick="xoaKhoiNganHang({{ q.id }}, this)">
+                    <i class="fas fa-trash"></i>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="q-card-body">
+            <div class="q-text" style="font-size: 1.05rem; font-weight: 600; color: #0f172a; margin-bottom: 15px;">{{ q.noi_dung }}</div>
+            {% set _ml = [q.cau_a|default('')|length, q.cau_b|default('')|length, q.cau_c|default('')|length, q.cau_d|default('')|length]|max %}
+            {% if _ml <= 30 %}{% set _col = 'col-6 col-md-3' %}{% elif _ml <= 80 %}{% set _col = 'col-12 col-sm-6' %}{% else %}{% set _col = 'col-12' %}{% endif %}
+            <div class="row g-2">
+                {% for opt, val in [('A',q.cau_a),('B',q.cau_b),('C',q.cau_c),('D',q.cau_d)] %}
+                <div class="{{ _col }}">
+                    <div class="opt-view {% if q.dap_an_dung == opt %}correct{% endif %}">
+                        <div class="opt-letter">{{ opt }}</div>
+                        <div class="opt-text" style="color: #475569; flex:1 1 0; min-width:0;">{{ val }}</div>
+                        {% if q.dap_an_dung == opt %}
+                        <div class="correct-mark"><i class="fas fa-check-circle"></i></div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="text-center py-5" style="background: #f8fafc; border-radius: 16px; border: 1px dashed #e2e8f0;">
+        <i class="fas fa-box-open mb-3" style="font-size: 3rem; color: #555;"></i>
+        <h5 class="text-muted">Chưa có câu hỏi nào khớp bộ lọc của môn này!</h5>
+    </div>
+{% endif %}
+{% endif %}

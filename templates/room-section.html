@@ -1,0 +1,312 @@
+{#
+  room-section.html — TAB "PHÒNG THI" trên trang chủ (include vào index.html).
+
+  Gồm: phòng của tôi, phòng toàn trường, và form tạo phòng mới (nạp bằng AJAX
+  từ /tao_phong?partial=1).
+#}
+<div class="tab-pane {% if active_tab == 'room' %}active{% endif %}" id="room-tab">
+    <div class="room-section">
+        <!-- Thanh đầu: pills (trái) + tìm kiếm & nút tạo (phải) — TRÊN đường line trắng -->
+        <div class="room-header-bar">
+        <ul class="nav nav-pills custom-pills mb-0" id="roomPills" role="tablist" style="display: flex !important; flex-wrap: nowrap !important; gap: 0px !important; margin: 0 !important; padding: 0 !important;">
+            
+            <li class="nav-item" role="presentation" style="margin: 0 !important; padding: 0 !important; border-radius:10px!important; overflow:hidden!important; margin-right: 5px !important;">
+                <button class="nav-link active" id="all-rooms-tab" onclick="showRoomTab('all-rooms')" type="button"
+                        style="padding: 9px 18px !important; display: inline-flex !important; align-items: center !important; overflow:hidden!important;border-radius:10px!important;background:#fff!important;border-color:var(--primary)!important;color:var(--primary)!important; font-size: 0.9rem !important;">
+                    <i class="fas fa-globe" style="margin-right: 5px;"></i>Tất cả các phòng
+                </button>
+            </li>
+
+            <li class="nav-item" role="presentation" style="margin: 0 !important; padding: 0 !important; border-radius:10px!important; overflow:hidden!important; margin-right: 5px !important;">
+                <button class="nav-link" id="my-rooms-tab" onclick="showRoomTab('my-rooms')" type="button"
+                        style="padding: 9px 18px !important; display: inline-flex !important; align-items: center !important; overflow:hidden!important;border-radius:10px!important; font-size: 0.9rem !important;">
+                    <i class="fas fa-user-tie" style="margin-right: 5px;"></i>Phòng thi của tôi
+                </button>
+            </li>
+
+            <li class="nav-item" role="presentation" style="margin: 0 !important; padding: 0 !important; border-radius:10px!important; overflow:hidden!important;">
+                <button class="nav-link" id="done-rooms-tab" onclick="showRoomTab('done-rooms')" type="button"
+                        style="padding: 9px 18px !important; display: inline-flex !important; align-items: center !important; overflow:hidden!important;border-radius:10px!important; font-size: 0.9rem !important;">
+                    <i class="fas fa-clipboard-check" style="margin-right: 5px;"></i>Đã thi xong
+                </button>
+            </li>
+            
+        </ul>
+
+            <div class="room-toolbar">
+                <div class="nh-search">
+                    <input type="checkbox" id="roomSearchChk" class="nh-search-chk">
+                    <label for="roomSearchChk" class="nh-search-icon" title="Tìm phòng thi"><i class="fas fa-search"></i></label>
+                    <input type="text" id="roomSearch" class="nh-search-input" placeholder="Tìm tên phòng, môn, giáo viên..." onkeyup="filterRooms()">
+                </div>
+                <a href="/tao_phong" class="room-btn-new" id="roomBtnNew" title="Tạo phòng thi mới" style="display:none;"><i class="fas fa-plus"></i></a>
+            </div>
+        </div>
+
+        <div class="tab-content" id="roomPillsContent">
+            <!-- ===== TAB 1: TẤT CẢ CÁC PHÒNG (đang mở toàn hệ thống) — chỉ xem/thi thử ===== -->
+            <div class="tab-pane fade show active" id="all-rooms" role="tabpanel">
+                <div class="table-wrapper room-table-wrap room-table-fit" style="overflow-x:auto;">
+                    <table class="data-table room-table lib-table-modern lib-table-fit">
+                        <thead><tr>
+                            <th><i class="fas fa-door-open"></i> Tên phòng</th>
+                            <th><i class="fas fa-hashtag"></i> Mã phòng</th>
+                            <th><i class="fas fa-book"></i> Môn học</th>
+                            <th><i class="fas fa-user-tie"></i> Giáo viên</th>
+                            <th class="text-center"><i class="fas fa-play-circle"></i> Bắt đầu thi</th>
+                            <th class="text-center"><i class="fas fa-hourglass-half"></i> Thời lượng</th>
+                        </tr></thead>
+                        <tbody>
+                            {% for p in phong_dang_mo_he_thong %}
+                            <tr data-search="{{ (p.ten_phong ~ ' ' ~ p.ma_phong ~ ' ' ~ p.ten_mon ~ ' ' ~ p.ten_gv)|lower }}">
+                                <td class="col-primary">{{ p.ten_phong }}</td>
+                                <td style="white-space:nowrap;">{{ p.ma_phong }}{% if p.co_mat_khau %} <i class="fas fa-lock" title="Phòng có mật khẩu" style="color:#d97706;font-size:.72rem;"></i>{% endif %}</td>
+                                <td><span class="badge-count">{{ p.ten_mon }}</span></td>
+                                <td>{{ p.ten_gv }}</td>
+                                <td class="text-center">{{ p.thoi_gian_bat_dau.strftime('%H:%M %d/%m/%Y') if p.thoi_gian_bat_dau else 'Chưa đặt' }}</td>
+                                <td class="text-center">{{ p.thoi_luong_lam_bai }} phút</td>
+                            </tr>
+                            {% endfor %}
+                            {% if not phong_dang_mo_he_thong %}
+                            <tr><td colspan="6" style="text-align:center;padding:60px 20px;color:var(--text-muted);"><i class="fas fa-box-open" style="font-size:2.6rem;opacity:.5;display:block;margin-bottom:12px;"></i><h5 style="color:var(--text-secondary);margin-bottom:5px;">Hệ thống hiện chưa có phòng thi nào đang mở</h5></td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ===== TAB 2: PHÒNG THI CỦA TÔI (chuẩn bị / đang mở) — CÙNG cột tab 1 + thao tác quản lý ===== -->
+            <div class="tab-pane fade" id="my-rooms" role="tabpanel">
+                {% set my_active = phong_this | rejectattr('trang_thai','equalto','da_dong') | list %}
+                <div class="table-wrapper room-table-wrap room-table-fit" style="overflow-x:auto;">
+                    <table class="data-table room-table lib-table-modern lib-table-fit">
+                        <thead><tr>
+                            <th><i class="fas fa-door-open"></i> Tên phòng</th>
+                            <th><i class="fas fa-hashtag"></i> Mã phòng</th>
+                            <th><i class="fas fa-book"></i> Môn học</th>
+                            <th><i class="fas fa-user-tie"></i> Giáo viên</th>
+                            <th class="text-center"><i class="fas fa-play-circle"></i> Bắt đầu thi</th>
+                            <th class="text-center"><i class="fas fa-hourglass-half"></i> Thời lượng</th>
+                            <th class="text-center" style="white-space:nowrap;"><i class="fas fa-gear"></i> Thao tác</th>
+                        </tr></thead>
+                        <tbody>
+                            {% for p in my_active %}
+                            <tr data-search="{{ (p.ten_phong ~ ' ' ~ p.ma_phong ~ ' ' ~ p.ten_mon ~ ' ' ~ p.ten_de_thi)|lower }}">
+                                <td class="col-primary">{{ p.ten_phong }}</td>
+                                <td style="white-space:nowrap;">{{ p.ma_phong }}{% if p.co_mat_khau %} <i class="fas fa-lock" title="Phòng có mật khẩu" style="color:#d97706;font-size:.72rem;"></i>{% endif %}</td>
+                                <td><span class="badge-count">{{ p.ten_mon }}</span></td>
+                                <td>Bạn</td>
+                                <td class="text-center">{{ p.thoi_gian_bat_dau.strftime('%H:%M %d/%m/%Y') if p.thoi_gian_bat_dau else 'Chưa đặt' }}</td>
+                                <td class="text-center">{{ p.thoi_luong_lam_bai }} phút</td>
+                                <td><div class="tbl-actions center">
+                                    <a href="/quan_ly_phong/{{ p.id }}" class="btn-act btn-view icon-only" data-tip="Quản lý" title="Quản lý phòng"><i class="fas fa-cog"></i></a>
+                                    <a href="/giam_sat_phong/{{ p.id }}" class="btn-act btn-room icon-only" data-tip="Giám sát" title="Giám sát"><i class="fas fa-video"></i></a>
+                                    <form method="POST" action="{{ url_for('phong_thi.dong_phong', phong_id=p.id) }}" class="d-inline"
+                                          onsubmit="return confirm('ĐÓNG phòng thi này? Học sinh sẽ không vào được nữa.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn-act btn-edit icon-only" data-tip="Đóng phòng" title="Đóng phòng"><i class="fas fa-lock"></i></button>
+                                    </form>
+                                </div></td>
+                            </tr>
+                            {% endfor %}
+                            {% if not my_active %}
+                            <tr><td colspan="7" style="text-align:center;padding:60px 20px;color:var(--text-muted);"><i class="fas fa-door-open" style="font-size:2.6rem;opacity:.5;display:block;margin-bottom:12px;"></i><h5 style="color:var(--text-secondary);margin-bottom:5px;">Bạn chưa có phòng nào đang mở</h5><p style="font-size:0.9rem;">Bấm <strong>+</strong> để tạo phòng thi mới.</p></td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ===== TAB 3: ĐÃ THI XONG (phòng của tôi đã đóng) — quản lý kết quả ===== -->
+            <div class="tab-pane fade" id="done-rooms" role="tabpanel">
+                {% set my_done = phong_this | selectattr('trang_thai','equalto','da_dong') | list %}
+                <div class="table-wrapper room-table-wrap room-table-fit" style="overflow-x:auto;">
+                    <table class="data-table room-table lib-table-modern lib-table-fit">
+                        <thead><tr>
+                            <th><i class="fas fa-door-open"></i> Tên phòng</th>
+                            <th><i class="fas fa-file-lines"></i> Đề thi</th>
+                            <th><i class="fas fa-book"></i> Môn thi</th>
+                            <th class="text-center"><i class="fas fa-id-card"></i> Mã môn</th>
+                            <th class="text-center"><i class="fas fa-barcode"></i> Mã đề</th>
+                            <th class="text-center"><i class="fas fa-graduation-cap"></i> Hình thức</th>
+                            <th class="text-center"><i class="fas fa-clock"></i> Học kỳ</th>
+                            <th class="text-center"><i class="fas fa-calendar-day"></i> Năm học</th>
+                            <th class="text-center"><i class="fas fa-users"></i> Đã dự thi</th>
+                            <th class="text-center"><i class="fas fa-star"></i> Điểm TB</th>
+                            <th class="text-center"><i class="fas fa-calendar"></i> Ngày thi</th>
+                            <th class="text-center" style="white-space:nowrap;"><i class="fas fa-gear"></i> Thao tác</th>
+                        </tr></thead>
+                        <tbody>
+                            {% for p in my_done %}
+                            {% set mt = p.meta %}
+                            <tr data-search="{{ (p.ten_phong ~ ' ' ~ p.ten_mon ~ ' ' ~ p.ten_de_thi)|lower }}">
+                                <td class="col-primary">{{ p.ten_phong }}</td>
+                                <td>{{ mt.ten or p.ten_de_thi }}</td>
+                                <td><span class="badge-count">{{ p.ten_mon }}</span></td>
+                                <td class="text-center">{% if mt.ma_hp %}{{ mt.ma_hp }}{% else %}<span class="col-muted">—</span>{% endif %}</td>
+                                <td class="text-center">{% if mt.ma_de %}<span class="badge-count">{{ mt.ma_de }}</span>{% else %}<span class="col-muted">—</span>{% endif %}</td>
+                                <td class="text-center">{% if mt.hinh_thuc %}{{ mt.hinh_thuc }}{% else %}<span class="col-muted">—</span>{% endif %}</td>
+                                <td class="text-center">{% if mt.hoc_ky %}{{ mt.hoc_ky }}{% else %}<span class="col-muted">—</span>{% endif %}</td>
+                                <td class="text-center">{% if mt.nam_hoc %}{{ mt.nam_hoc }}{% else %}<span class="col-muted">—</span>{% endif %}</td>
+                                <td class="text-center"><span class="badge-count">{{ p.da_nop or 0 }}/{{ p.tong_thi_sinh or 0 }}</span></td>
+                                <td class="text-center">{% if p.diem_tb %}{% set dtb=p.diem_tb|float %}<strong style="color:{% if dtb>=8 %}#16a34a{% elif dtb>=5 %}#d97706{% else %}#dc2626{% endif %};">{{"%.1f"|format(dtb)}}</strong>{% else %}<span class="col-muted">--</span>{% endif %}</td>
+                                <td class="text-center">{{ p.thoi_gian_bat_dau.strftime('%d/%m/%Y') if p.thoi_gian_bat_dau else '—' }}</td>
+                                <td><div class="tbl-actions center">
+                                    <a href="/phan_tich_phong/{{ p.id }}" class="btn-act btn-view icon-only" data-tip="Trang thống kê" title="Trang thống kê"><i class="fas fa-chart-column"></i></a>
+                                    <a href="/phan_tich_phong/{{ p.id }}/excel" class="btn-act btn-bank icon-only" data-tip="Tải Excel" title="Tải Excel"><i class="fas fa-file-excel"></i></a>
+                                    <form method="POST" action="{{ url_for('phong_thi.xoa_phong', phong_id=p.id) }}" style="display:inline-flex;margin:0;" onsubmit="return confirm('XÓA phòng và toàn bộ kết quả?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-act btn-del icon-only" data-tip="Xóa phòng" title="Xóa phòng"><i class="fas fa-trash"></i></button></form>
+                                </div></td>
+                            </tr>
+                            {% endfor %}
+                            {% if not my_done %}
+                            <tr><td colspan="12" style="text-align:center;padding:60px 20px;color:var(--text-muted);"><i class="fas fa-clipboard-check" style="font-size:2.6rem;opacity:.5;display:block;margin-bottom:12px;"></i><h5 style="color:var(--text-secondary);margin-bottom:5px;">Chưa có phòng nào đã thi xong</h5><p style="font-size:0.9rem;">Phòng sau khi đóng sẽ xuất hiện ở đây để xem kết quả.</p></td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.room-section{max-width:var(--content-narrow);margin:0 auto;padding-top:12px}
+/* Thanh đầu: pills + toolbar CÙNG 1 hàng, đường line trắng (border-bottom) nằm DƯỚI cả 2 */
+.room-header-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:5px;margin-bottom:8px}
+.room-header-bar #roomPills{flex-wrap:wrap}
+/* Cụm tìm kiếm + nút tạo đẩy sang phải, cùng hàng với pills (TRÊN line trắng) */
+.room-toolbar{margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:8px}
+/* Đẩy nội dung mỗi tab xuống dưới pills */
+#all-rooms,#my-rooms,#done-rooms{margin-top:12px}
+/* Nút "+" tạo phòng mới — đồng bộ .lib-btn-new / .lop-btn-new */
+.room-btn-new{background:var(--grad-primary,linear-gradient(135deg,#1d4ed8,#2563eb));color:#fff;width:42px;height:42px;flex:0 0 auto;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:1rem;text-decoration:none;box-shadow:0 4px 12px rgba(37,99,235,.25);transition:transform .2s var(--ease),box-shadow .2s var(--ease)}
+.room-btn-new:hover{transform:translateY(-2px);color:#fff;box-shadow:0 8px 20px rgba(37,99,235,.35)}
+.table-wrapper{background:var(--surface);border:1px solid var(--border);border-radius:10px!important;overflow:hidden;box-shadow:var(--shadow-sm)}
+.text-center{text-align:center}
+.room-table-wrap{border-radius:10px!important;overflow:hidden}
+.room-table.data-table{border-radius:10px!important}
+.room-table.data-table th,.room-table.data-table td{font-size:.8rem !important}
+.room-table.data-table tbody td{padding:5px 7px;color:#3b3e44}
+.room-table.data-table thead th{padding:5px 7px;background:#f1f5f9;color:#555b65;font-weight:600}
+.room-table thead th i{margin-right:4px;opacity:.6}
+.room-table .tbl-actions .btn-act.icon-only{width:30px;height:30px;padding:0;justify-content:center;font-size:.8rem}
+.room-table .tbl-actions{gap:4px}
+.room-table .tbl-actions .btn-act{font-size:.72rem;padding:4px 8px}
+.badge-status{padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:700;display:inline-block;white-space:nowrap}
+.badge-status.status-prep{background:rgba(255,193,7,.15);color:#d97706;border:1px solid rgba(255,193,7,.3)}
+.badge-status.status-open{background:rgba(56,239,125,.15);color:#16a34a;border:1px solid rgba(56,239,125,.3)}
+.badge-status.status-closed{background:#eef2f9;color:#64748b;border:1px solid #cbd5e1}
+
+/* ── Pills: giết SẠCH mọi nền / ring / pseudo-element thừa ── */
+.room-section .custom-pills,
+.room-section .custom-pills *,
+.room-section .custom-pills *::before,
+.room-section .custom-pills *::after{background:transparent!important}
+.room-section .custom-pills .nav-link,
+.room-section .custom-pills .nav-link:hover,
+.room-section .custom-pills .nav-link:focus,
+.room-section .custom-pills .nav-link:focus-visible,
+.room-section .custom-pills .nav-link:active,
+.room-section .custom-pills .nav-link.active{outline:none!important;box-shadow:none!important;transform:none!important;border-radius:10px!important}
+.room-section .custom-pills .nav-link::after,
+.room-section .custom-pills .nav-link::before,
+.room-section .custom-pills .nav-link:hover::after,
+.room-section .custom-pills .nav-link:hover::before,
+.room-section .custom-pills .nav-link:focus::after,
+.room-section .custom-pills .nav-link:focus::before,
+.room-section .custom-pills .nav-link:focus-visible::after,
+.room-section .custom-pills .nav-link:focus-visible::before,
+.room-section .custom-pills .nav-link:active::after,
+.room-section .custom-pills .nav-link:active::before,
+.room-section .custom-pills .nav-link.active::after,
+.room-section .custom-pills .nav-link.active::before{display:none!important;content:none!important;background:transparent!important;border-radius:0!important}
+
+/* ── Tab thường: nền trắng, viền xám nhạt, chữ xám ── */
+.room-section .custom-pills .nav-link{display:inline-flex;align-items:center;gap:8px;padding:6px 10px!important;border:1px solid var(--border)!important;background:#fff!important;font-weight:600;font-size:.9rem;color:var(--text-muted)!important;cursor:pointer;text-decoration:none;transition:border-color .25s var(--ease),color .25s var(--ease)}
+/* ── Hover / Active: nền trắng + viền #2563eb + chữ xanh ── */
+.room-section .custom-pills .nav-link:hover,
+.room-section .custom-pills .nav-link.active{border-color:#2563eb!important;background:#fff!important;color:#2563eb!important}
+.room-section .btn-outline-light{color:var(--primary);border-color:var(--border-strong)}
+.room-section .btn-outline-light:hover{background:var(--primary);border-color:var(--primary);color:#fff}
+
+/* ===================================================================
+   GIỐNG TRANG THƯ VIỆN: tab nhỏ 1 HÀNG NGANG cuộn được + bảng CUỘN NGANG
+   + KHÓA CỐ ĐỊNH CỘT ĐẦU (sticky). Giữ cỡ chữ bình thường (0.8rem).
+   =================================================================== */
+/* Pills (Tất cả / Của tôi / Đã thi xong): 1 hàng ngang, cuộn ngang nếu hẹp, ẩn thanh cuộn */
+.room-section #roomPills{
+    flex-wrap:nowrap!important; overflow-x:auto;
+    flex:0 1 auto!important;                 /* KHÔNG dãn -> ul ÔM GỌN 3 tab (không dàn đều cả hàng) */
+    justify-content:flex-start!important;    /* dồn về TRÁI, sát nhau */
+    min-width:0; gap:1px!important;          /* chỉ còn khe 6px giữa các tab (giống Thư viện) */
+    scrollbar-width:none; -webkit-overflow-scrolling:touch;
+}
+.room-section .custom-pills .nav-link{padding:9px 18px!important}   /* cỡ nút như Thư viện */
+.room-section .custom-pills .nav-item{flex:0 0 auto!important; margin-right: -4px!important; margin-left: 0!important; margin-top: 0!important; margin-bottom: 0!important;}
+.room-section #roomPills::-webkit-scrollbar{display:none}
+.room-section .custom-pills .nav-link{white-space:nowrap;flex-shrink:0}
+
+/* Bảng: bề rộng tối thiểu -> màn hẹp thì CUỘN NGANG (không bóp cột) */
+.room-section .lib-table-fit{min-width:760px}
+/* Cột đầu (Tên phòng) LUÔN DÍNH TRÁI khi vuốt ngang */
+.room-section .table-wrapper>table th:first-child,
+.room-section .table-wrapper>table td:first-child{
+    position:sticky; left:0; z-index:1; background:#fff; box-shadow:1px 0 0 #e5e7eb;
+}
+.room-section .table-wrapper>table thead th:first-child{z-index:3; background:#f1f5f9}
+.room-section .table-wrapper>table tbody tr:hover td:first-child{background:#f8fafc}
+</style>
+
+<script>
+function copyLink(p){var u=location.protocol+'//'+location.host+p;navigator.clipboard.writeText(u).then(function(){alert('Đã sao chép link!')})}
+
+// Hàm chuyển tab room — dùng JS thuần, KHÔNG phụ thuộc Bootstrap Tab API
+window.showRoomTab = function(tabId) {
+    // 1. Active/deactive buttons
+    document.querySelectorAll('#roomPills .nav-link').forEach(function(btn) {
+        btn.classList.remove('active');
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        btn.style.color = '';
+    });
+    var idMap = {'all-rooms':'all-rooms-tab','my-rooms':'my-rooms-tab','done-rooms':'done-rooms-tab'};
+    var activeBtn = document.getElementById(idMap[tabId] || 'all-rooms-tab');
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.background = '#fff';
+        activeBtn.style.borderColor = 'var(--primary)';
+        activeBtn.style.color = 'var(--primary)';
+    }
+    // 2. Show/hide panes
+    document.querySelectorAll('#roomPillsContent > .tab-pane').forEach(function(pane) {
+        pane.classList.remove('show', 'active');
+        pane.style.display = 'none';
+    });
+    var target = document.getElementById(tabId);
+    if (target) {
+        target.classList.add('show', 'active');
+        target.style.display = 'block';
+    }
+    // 3. Nút "+" tạo phòng CHỈ hiện ở tab "Phòng thi của tôi"
+    var btn = document.getElementById('roomBtnNew');
+    if (btn) btn.style.display = (tabId === 'my-rooms') ? '' : 'none';
+};
+
+// Ô tìm kiếm dùng CHUNG trên thanh đầu: lọc dòng bảng của CẢ 3 tab
+function filterRooms() {
+    var kw = (document.getElementById('roomSearch').value || '').toLowerCase().trim();
+    document.querySelectorAll('#roomPillsContent tbody tr[data-search]').forEach(function(tr) {
+        tr.style.display = (tr.getAttribute('data-search') || '').indexOf(kw) > -1 ? '' : 'none';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Khi click "Phòng thi" trên navbar, kích hoạt tab "all-rooms"
+    var rn = document.querySelector('.nav-link[data-tab="room"]');
+    if (rn) rn.addEventListener('click', function() { showRoomTab('all-rooms'); });
+    // Mở đúng tab theo ?pill=
+    var pp = new URLSearchParams(location.search).get('pill');
+    if (pp === 'my') showRoomTab('my-rooms');
+    else if (pp === 'done') showRoomTab('done-rooms');
+});
+</script>

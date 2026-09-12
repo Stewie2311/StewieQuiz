@@ -1,0 +1,115 @@
+{#
+  student-history-section.html — TAB "BÀI ĐÃ THI" của học sinh (include vào index.html).
+
+  Nút "Xem lại bài" chỉ hiện khi phòng ĐÃ kết thúc (cờ `da_ket_thuc` từ server).
+  Phòng còn đang thi mà cho xem lại là lộ đáp án cho bạn chưa thi.
+#}
+<style>
+    /* Ép cỡ chữ 0.8rem cho TOÀN BỘ form Bài Thi Đã Làm — thắng typography-unify.css
+       (nạp cuối, dùng !important) nhờ độ đặc hiệu #id. Không nhắm <i> nên icon giữ nguyên. */
+    #student-history-tab :where(h1,h2,h3,h4,h5,h6,p,span,div,strong,small,label,a,button,input,td,th,.badge) {
+        font-size: 0.8rem !important;
+    }
+    /* Bo tròn các ô nền trắng — thắng square.css (* border-radius:0 !important) */
+    #student-history-tab .student-history-header,
+    #student-history-tab .table-wrapper,
+    #student-history-tab > .container > .text-center {
+        border-radius: var(--radius-lg) !important;
+    }
+</style>
+<div class="tab-pane {% if active_tab == 'student-history' %}active{% endif %}" id="student-history-tab">
+    <div class="container py-4" style="max-width: 1320px; font-family: var(--font-sans); font-size: 0.8rem;">
+
+        <div class="student-history-header"
+             style="display: inline-block; width: fit-content; max-width: 100%;
+                    background: var(--surface); border: 1px solid var(--border);
+                    border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+                    padding: 18px 22px; margin-bottom: var(--section-gap);
+                    font-family: var(--font-sans); font-size: 0.8rem;">
+            <div class="section-header" style="margin-bottom: 0;">
+                <h2 style="font-family: var(--font-sans);"><i class="fas fa-clock-rotate-left me-2" style="color:var(--primary);"></i>Bài Thi Đã Làm</h2>
+                <p style="font-family: var(--font-sans); font-size: 0.8rem;">Xem lại các bài thi bạn đã hoàn thành. Chi tiết câu đã chọn chỉ hiển thị
+                   sau khi phòng thi đã kết thúc.</p>
+            </div>
+        </div>
+
+        {% if lich_su_thi %}
+        <div class="table-wrapper" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-sm);">
+            <div style="overflow-x:auto;">
+                <table class="data-table" style="min-width:1120px;">
+                    <thead>
+                        <tr>
+                            <th>Phòng thi</th>
+                            <th style="width:150px;">Giáo viên</th>
+                            <th style="width:150px;">Môn</th>
+                            <th class="text-center" style="width:80px;">Mã đề</th>
+                            <th style="width:150px;">Hình thức thi</th>
+                            <th style="width:110px;">Học kỳ</th>
+                            <th class="text-center" style="width:80px;">Điểm</th>
+                            <th class="text-center" style="width:85px;">Kết quả</th>
+                            <th style="width:145px;">Thời gian nộp</th>
+                            <th class="text-center" style="width:125px;">Trạng thái</th>
+                            <th class="text-center" style="width:115px;">Xem lại</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for b in lich_su_thi %}
+                        <tr>
+                            <td>
+                                <div style="font-weight:700;color:var(--text-primary);">{{ b.ten_phong }}</div>
+                            </td>
+                            <td style="color:var(--text-secondary);">
+                                <i class="fas fa-user-tie" style="color:var(--text-muted);"></i> {{ b.ten_gv }}
+                            </td>
+                            <td>
+                                <span class="badge">{{ b.ten_mon }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span style="font-weight:700;color:var(--primary);">{{ b.meta.ma_de or '—' }}</span>
+                            </td>
+                            <td style="color:var(--text-secondary);">{{ b.meta.hinh_thuc or '—' }}</td>
+                            <td style="color:var(--text-secondary);">{{ b.meta.hoc_ky or '—' }}</td>
+                            <td class="text-center">
+                                {% set diem = b.diem if b.diem is not none else 0 %}
+                                <strong style="font-size:1.05rem;color:{% if diem >= 8 %}#16a34a{% elif diem >= 5 %}#d97706{% else %}#dc2626{% endif %};">
+                                    {{ '%.2f'|format(diem) }}
+                                </strong>
+                            </td>
+                            <td class="text-center" style="font-size:0.85rem;">
+                                <span style="color:#16a34a;font-weight:700;">{{ b.so_cau_dung or 0 }}</span>
+                                <span style="color:var(--text-muted);">/ {{ b.tong_so_cau or 0 }}</span>
+                            </td>
+                            <td style="font-size:0.82rem;color:var(--text-secondary);">{{ b.nop_str }}</td>
+                            <td class="text-center">
+                                {% if b.da_ket_thuc %}
+                                    <span style="background:#eef2f9;color:var(--text-muted);border:1px solid var(--border);padding:4px 10px;border-radius:20px;font-size:0.74rem;font-weight:700;white-space:nowrap;">🔒 Đã kết thúc</span>
+                                {% else %}
+                                    <span style="background:rgba(56,239,125,0.15);color:#16a34a;border:1px solid rgba(56,239,125,0.3);padding:4px 10px;border-radius:20px;font-size:0.74rem;font-weight:700;white-space:nowrap;">🟢 Đang diễn ra</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if b.da_ket_thuc %}
+                                    <a href="{{ url_for('thi_sinh.xem_lai_bai', thi_sinh_id=b.id) }}"
+                                       class="btn-act btn-view"><i class="fas fa-eye"></i> Xem lại</a>
+                                {% else %}
+                                    <span class="btn-act" style="background:#f1f5f9;color:#94a3b8;cursor:not-allowed;"
+                                          title="Chỉ xem lại được khi phòng thi đã kết thúc">
+                                        <i class="fas fa-lock"></i> Chờ kết thúc
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center py-5" style="background:var(--surface);border-radius:16px;border:1px dashed var(--border-strong);">
+            <i class="fas fa-folder-open fs-1 text-muted mb-3 opacity-50"></i>
+            <h5 class="text-muted">Bạn chưa hoàn thành bài thi nào.</h5>
+            <p class="small text-muted mb-0">Các bài thi đã nộp sẽ xuất hiện ở đây để bạn xem lại.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>

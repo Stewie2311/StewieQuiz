@@ -1,0 +1,37 @@
+/* ============================================================
+   typography-unify.css — ĐỒNG NHẤT FONT & CỠ CHỮ TOÀN WEB
+   (áp dụng cho cả 3 phân quyền: admin / giáo viên / học sinh)
+
+   CHỈ đổi FONT + KÍCH THƯỚC chữ. KHÔNG đổi MÀU, KHÔNG đổi CHỨC NĂNG.
+   - Đề mục (h1–h6): cùng font, cùng IN ĐẬM (700), cùng cỡ.
+   - Nội dung: cùng font, cùng cỡ.
+   Lấy chuẩn theo trang Tạo đề thi (đề mục ~1.05rem, nội dung ~0.9rem).
+
+   Nạp CUỐI trong base.html để ghi đè cỡ riêng của từng component/inline.
+   KHÔNG nhắm vào <i>/.fa* nên ICON GIỮ NGUYÊN (không bị co/giãn theo chữ).
+   ============================================================ */
+
+/* Gom thang cỡ chữ về 2 mức (component nào dùng biến cũng đồng nhất theo) */
+:root {
+    --fs-h1: 1.05rem; --fs-h2: 1.05rem; --fs-h3: 1.05rem; --fs-h4: 1.05rem;
+    --fs-base: 0.9rem; --fs-sm: 0.9rem; --fs-xs: 0.9rem;
+}
+
+/* ===== ĐỀ MỤC: cùng font + cùng đậm + cùng cỡ (giữ nguyên màu sẵn có) ===== */
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+    font-family: var(--font-sans) !important;
+    font-size: 1.05rem !important;
+    font-weight: 700 !important;
+    line-height: 1.4 !important;
+}
+
+/* ===== NỘI DUNG: cùng font + cùng cỡ ===== */
+body, p, label, li, dd, dt, td, th, figcaption, blockquote,
+input, select, textarea, button, .btn,
+.form-control, .form-control-dark,
+.badge, small, .small {
+    font-family: var(--font-sans) !important;
+    font-size: 0.9rem !important;
+}
+/* (Menu navbar .nav-link / .dropdown-item tự quản cỡ chữ riêng — xem navbar.html) */

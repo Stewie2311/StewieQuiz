@@ -1,0 +1,44 @@
+/* =====================================================================
+   dashboard.css — Các ô số liệu và lưới thẻ trên trang chủ / trang quản trị.
+   ===================================================================== */
+
+.dashboard-header {
+    margin-bottom: 30px;
+}
+
+.dashboard-header h1 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+}
+
+.dashboard-header p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+}
+
+.tabs-container {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+    animation: fadeInUp 0.3s ease-out;
+}
+
+@media (max-width: 1024px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}

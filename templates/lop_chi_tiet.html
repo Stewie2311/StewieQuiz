@@ -1,0 +1,204 @@
+{#
+  lop_chi_tiet.html — DANH SÁCH SINH VIÊN của một lớp.
+
+  Thêm sinh viên bằng tay, hoặc nạp cả danh sách từ Excel. Import đi 2 bước: xem
+  trước (soi lỗi từng dòng: thiếu MSSV, trùng, đã có trong lớp) rồi mới lưu, nên
+  giáo viên thấy trước vấn đề chứ không ghi bừa vào cơ sở dữ liệu.
+#}
+{% extends 'base.html' %}
+
+{% block title %}{{ lop.ten_lop }} - Lớp học{% endblock %}
+
+{% block extra_css %}
+<style>
+    .imp-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 2000;
+        display: none; align-items: flex-start; justify-content: center; padding: 30px 14px; overflow: auto; }
+    .imp-overlay.show { display: flex; }
+    .imp-box { background: #fff; border-radius: 16px; max-width: 700px; width: 100%; padding: 22px;
+        box-shadow: var(--shadow-lg); }
+    .imp-hint { background: var(--primary-softer); border: 1px solid var(--primary-soft);
+        border-radius: 10px; padding: 12px 14px; font-size: .84rem; color: var(--text-secondary);
+        line-height: 1.6; display: none; margin-top: 8px; }
+    .prev-table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-top: 12px; }
+    .prev-table th, .prev-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; }
+    .prev-table thead th { background: var(--surface-2); }
+    .imp-row-err { background: #fef2f2; }
+    .badge-loi { color: #b91c1c; font-weight: 700; font-size: .76rem; }
+    .badge-ok  { color: #15803d; font-weight: 700; font-size: .76rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-narrow">
+
+    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;">
+        <div>
+            <h2>{{ lop.ten_lop }}</h2>
+            <p style="color:var(--text-muted);font-size:.9rem;margin:0;">Sĩ số: <strong>{{ svs|length }}</strong> sinh viên</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ url_for('lop.danh_sach_lop') }}" class="btn-ghost-sm"><i class="fas fa-arrow-left"></i> Danh sách lớp</a>
+            <a href="{{ url_for('lop.xuat_excel', lop_id=lop.id) }}" class="btn-ghost-sm"><i class="fas fa-file-excel"></i> Tải Excel</a>
+            {% if is_owner %}
+            <a href="{{ url_for('lop.mau_excel') }}" class="btn-ghost-sm"><i class="fas fa-file-arrow-down"></i> Tải file mẫu</a>
+            <button class="btn-primary-sm" type="button" onclick="moImport()"><i class="fas fa-file-import"></i> Import Excel</button>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if not is_owner %}
+    <div class="card-section" style="margin-bottom:16px;display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:.88rem;">
+        <i class="fas fa-eye"></i> Bạn đang xem danh sách của lớp do <strong>người khác</strong> tạo — chỉ có thể xem và tải Excel.
+    </div>
+    {% else %}
+    <form class="card-section" method="POST" action="{{ url_for('lop.them_sv', lop_id=lop.id) }}" style="margin-bottom:16px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+            <div style="flex:1;min-width:130px;"><label class="form-label-dark">MSSV <span style="color:var(--danger)">*</span></label><input name="ma_so_sv" class="form-control-dark" required></div>
+            <div style="flex:1;min-width:160px;"><label class="form-label-dark">Họ và tên <span style="color:var(--danger)">*</span></label><input name="ho_ten" class="form-control-dark" required></div>
+            <div style="flex:1;min-width:160px;"><label class="form-label-dark">Email</label><input name="email" type="email" class="form-control-dark"></div>
+            <button class="btn-primary-sm" type="submit"><i class="fas fa-plus"></i> Thêm</button>
+        </div>
+    </form>
+    {% endif %}
+
+    <div class="table-wrapper" style="overflow-x:auto;">
+        <table class="data-table" style="min-width:600px;">
+            <thead>
+                <tr><th style="width:46px;">STT</th><th>MSSV</th><th>Họ và tên</th><th>Email</th>{% if is_owner %}<th style="width:60px;"></th>{% endif %}</tr>
+            </thead>
+            <tbody>
+                {% for s in svs %}
+                <tr>
+                    <td style="color:var(--text-muted);">{{ loop.index }}</td>
+                    <td style="font-family:monospace;font-weight:700;">{{ s.ma_so_sv }}</td>
+                    <td>{{ s.ho_ten }}</td>
+                    <td>{{ s.email or '—' }}</td>
+                    {% if is_owner %}
+                    <td>
+                        <form method="POST" action="{{ url_for('lop.xoa_sv', lop_id=lop.id, sv_id=s.id) }}"
+                              onsubmit="return confirm('Xóa sinh viên này khỏi lớp?');" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn-act btn-del icon-only" title="Xóa"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+                {% if not svs %}
+                <tr><td colspan="{{ 5 if is_owner else 4 }}" style="text-align:center;padding:30px;color:var(--text-muted);">Chưa có sinh viên trong lớp này.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL IMPORT EXCEL -->
+<div class="imp-overlay" id="impOverlay">
+    <div class="imp-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;font-size:1.1rem;color:var(--text-primary);">Import sinh viên từ Excel</h3>
+            <button type="button" onclick="dongImport()" style="background:none;border:none;font-size:1.6rem;line-height:1;color:#94a3b8;cursor:pointer;">&times;</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-top:14px;">
+            <input type="file" id="impFile" accept=".xlsx" class="form-control-dark" style="flex:1;">
+            <button class="btn-ghost-sm" type="button" title="Hướng dẫn"
+                    onclick="var h=document.getElementById('impHint');h.style.display=(h.style.display==='block'?'none':'block')">
+                <i class="fas fa-question"></i>
+            </button>
+        </div>
+        <div class="imp-hint" id="impHint">
+            File <b>.xlsx</b> cần hàng đầu là <b>tiêu đề cột</b> gồm: <b>MSSV</b>, <b>Họ và tên</b>, <b>Email</b>
+            (Email không bắt buộc). Thứ tự cột không quan trọng. Nên bấm
+            <b>"Tải file mẫu"</b> để có sẵn khung đúng rồi điền vào.
+        </div>
+
+        <div id="impMsg" style="font-size:.85rem;margin-top:10px;"></div>
+
+        <div id="impPreviewWrap" style="display:none;">
+            <div id="impSummary" style="font-size:.85rem;font-weight:600;margin-top:10px;"></div>
+            <div style="max-height:300px;overflow:auto;">
+                <table class="prev-table" id="impPreview"></table>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;">
+                <button class="btn-ghost-sm" type="button" onclick="dongImport()">Hủy</button>
+                <button class="btn-primary-sm" type="button" id="btnLuuImport" onclick="luuImport()">
+                    <i class="fas fa-save"></i> Lưu vào lớp
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const LOP_ID = {{ lop.id }};
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+let previewRows = [];
+
+function moImport(){ document.getElementById('impOverlay').classList.add('show'); }
+function dongImport(){ document.getElementById('impOverlay').classList.remove('show'); resetImport(); }
+function resetImport(){
+    document.getElementById('impFile').value = '';
+    document.getElementById('impMsg').textContent = '';
+    document.getElementById('impPreviewWrap').style.display = 'none';
+    previewRows = [];
+}
+function esc(s){ const d=document.createElement('div'); d.textContent = s==null?'':s; return d.innerHTML; }
+
+document.getElementById('impFile').addEventListener('change', async function(){
+    const f = this.files[0]; if (!f) return;
+    const msg = document.getElementById('impMsg');
+    msg.style.color = '#475569'; msg.textContent = 'Đang đọc file…';
+    document.getElementById('impPreviewWrap').style.display = 'none';
+    const fd = new FormData(); fd.append('file', f);
+    try {
+        const res = await fetch(`/lop/${LOP_ID}/import_preview`, {
+            method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
+        });
+        const d = await res.json();
+        if (!d.ok) { msg.style.color = '#b91c1c'; msg.textContent = d.error || 'Không đọc được file'; return; }
+        previewRows = d.rows || [];
+        msg.textContent = '';
+        veBangPreview(d);
+    } catch (e) { msg.style.color = '#b91c1c'; msg.textContent = 'Lỗi: ' + e.message; }
+});
+
+function veBangPreview(d){
+    const wrap = document.getElementById('impPreviewWrap');
+    const tbl  = document.getElementById('impPreview');
+    document.getElementById('impSummary').innerHTML =
+        `Tổng ${d.rows.length} dòng — <span style="color:#15803d;">${d.hop_le} hợp lệ</span>, ` +
+        `<span style="color:#b91c1c;">${d.rows.length - d.hop_le} có vấn đề</span> ` +
+        `(chỉ dòng hợp lệ được lưu).`;
+    let html = '<thead><tr><th>MSSV</th><th>Họ tên</th><th>Email</th><th>Tình trạng</th></tr></thead><tbody>';
+    d.rows.forEach(r => {
+        html += `<tr class="${r.ok ? '' : 'imp-row-err'}">` +
+                `<td>${esc(r.mssv)}</td><td>${esc(r.ho_ten)}</td><td>${esc(r.email)}</td>` +
+                `<td>${r.ok ? '<span class="badge-ok">Hợp lệ</span>' : '<span class="badge-loi">'+esc(r.loi)+'</span>'}</td></tr>`;
+    });
+    html += '</tbody>';
+    tbl.innerHTML = html;
+    document.getElementById('btnLuuImport').disabled = (d.hop_le === 0);
+    wrap.style.display = 'block';
+}
+
+async function luuImport(){
+    const rows = previewRows.filter(r => r.ok);
+    if (!rows.length) return;
+    const btn = document.getElementById('btnLuuImport'); btn.disabled = true;
+    try {
+        const res = await fetch(`/lop/${LOP_ID}/import_save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ rows })
+        });
+        const d = await res.json();
+        if (d.ok) { window.location.reload(); }
+        else { document.getElementById('impMsg').style.color = '#b91c1c'; document.getElementById('impMsg').textContent = 'Lưu thất bại'; btn.disabled = false; }
+    } catch (e) { btn.disabled = false; }
+}
+</script>
+{% endblock %}

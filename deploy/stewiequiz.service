@@ -1,0 +1,47 @@
+; systemd unit: chạy ứng dụng bằng gunicorn, tự khởi động lại khi crash/reboot.
+; Chép tới: /etc/systemd/system/stewiequiz.service
+;
+;   sudo systemctl daemon-reload
+;   sudo systemctl enable --now stewiequiz
+;   sudo systemctl status stewiequiz
+;   sudo journalctl -u stewiequiz -f      # xem log trực tiếp
+
+[Unit]
+Description=Stewie Quiz (Flask + Socket.IO)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/stewiequiz
+; KHÔNG dùng EnvironmentFile: config.py đã tự đọc .env bằng load_dotenv() theo
+; WorkingDirectory. (systemd phân tích .env khắt khe hơn, dễ làm service chết.)
+Environment="FLASK_ENV=production"
+Environment="PATH=/var/www/stewiequiz/venv/bin"
+
+# ⚠️ --workers 1 là BẮT BUỘC, không được tăng.
+#   • Socket.IO (giám sát webcam) giữ danh sách kết nối trong RAM của tiến trình:
+#     nhiều worker -> giáo viên nối vào worker A, học sinh gửi hình vào worker B
+#     -> màn hình giám sát trống trơn.
+#   • Flask-Limiter đang đếm bằng memory:// -> mỗi worker đếm riêng, hạn mức sai.
+# Muốn phục vụ nhiều người hơn thì TĂNG --threads (không phải --workers), vì
+# Socket.IO đang chạy async_mode='threading'.
+ExecStart=/var/www/stewiequiz/venv/bin/gunicorn \
+    --workers 1 \
+    --threads 16 \
+    --timeout 300 \
+    --bind 127.0.0.1:5000 \
+    --access-logfile - \
+    --error-logfile - \
+    wsgi:app
+
+Restart=always
+RestartSec=5
+
+# Chặn ghi bậy ra ngoài thư mục dự án (an toàn hơn)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

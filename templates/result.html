@@ -1,0 +1,781 @@
+{#
+  result.html — DANH SÁCH CÂU HỎI AI VỪA SINH RA, chờ giáo viên duyệt.
+
+  Trang này hiện ngay sau khi AI trả kết quả. Câu hỏi CHƯA được lưu vào đâu cả —
+  đây là điểm dừng bắt buộc để con người xem lại trước khi lưu.
+
+  Vì sao bắt buộc: AI vẫn chọn sai đáp án, vẫn hỏi trùng ý, dù prompt có chặt
+  tới đâu. Cột "giải thích" của mỗi câu chính là để giáo viên đối chiếu nhanh
+  xem đáp án AI chọn có thật sự đúng hay không.
+
+  Từ đây giáo viên có hai lựa chọn: sửa rồi lưu vào thư viện cá nhân, hoặc đẩy
+  thẳng vào ngân hàng chung (lúc đó câu hỏi mới bị kiểm duyệt tự động).
+#}
+{% extends "base.html" %}
+
+{% block title %}Kết quả AI - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* RESULT HEADER */
+    .result-header {
+        background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(240,147,251,0.08));
+        border: 1px solid rgba(102,126,234,0.25);
+        border-radius: 20px; padding: 28px;
+        margin-bottom: 25px;
+        animation: fadeIn 0.5s ease;
+    }
+    .result-title {
+        font-size: 1.4rem; font-weight: 800; color: #0f172a;
+        margin-bottom: 5px;
+    }
+    .result-title span {
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    /* STAT MINI */
+    .stat-mini {
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px; padding: 14px 18px;
+        text-align: center;
+    }
+    .stat-mini-val { font-size: 1.8rem; font-weight: 800; }
+    .stat-mini-label { font-size: 0.75rem; color: #64748b; }
+
+    /* QUESTION CARD */
+    .q-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px; margin-bottom: 14px;
+        overflow: hidden; transition: all 0.3s;
+    }
+    .q-card:hover {
+        border-color: rgba(102,126,234,0.3);
+        box-shadow: 0 5px 20px rgba(102,126,234,0.1);
+    }
+    .q-card.editing {
+        border-color: rgba(255,193,7,0.4);
+        box-shadow: 0 5px 20px rgba(255,193,7,0.1);
+    }
+    .q-card-header {
+        padding: 14px 20px;
+        display: flex; justify-content: space-between;
+        align-items: center; flex-wrap: wrap; gap: 8px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .q-card-body { padding: 20px; }
+    /* "Câu 18", "Câu 19"... — dùng CHUNG font Be Vietnam Pro như toàn site.
+       Trước đây bị uppercase + letter-spacing:1px nên chữ bị giãn ra, trông
+       như một font khác hẳn phần nội dung câu hỏi bên dưới. */
+    .q-num {
+        font-family: var(--font-sans);
+        font-size: 0.95rem; font-weight: 700;
+        color: #2563eb;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+    .q-text {
+        font-family: var(--font-sans);
+        font-size: 1rem; font-weight: 600;
+        color: #0f172a; margin-bottom: 16px; line-height: 1.6;
+    }
+
+
+    /* ĐIỆN THOẠI: nhãn (Câu N · Chương · Độ khó) thu nhỏ để xuống dòng gọn gàng
+       thay vì bị dồn chật một hàng, chữ bóp lại khó đọc. */
+    @media (max-width: 768px) {
+        .q-card-header { padding: 10px 14px; gap: 6px; }
+        .q-card-body { padding: 14px; }
+        .q-num { font-size: 0.85rem; }
+        .q-card-header .badge-chuong,
+        .q-card-header .badge-de,
+        .q-card-header .badge-tb,
+        .q-card-header .badge-kho { font-size: 0.75rem !important; padding: 3px 8px !important; }
+    }
+
+    /* ===== KIỂM DUYỆT: Bloom, cảnh báo, nghi trùng, loại bỏ ===== */
+    .kd-summary {
+        background: #ecfdf5; border: 1px solid rgba(22,163,74,.3); color: #14532d;
+        border-radius: 14px; padding: 14px 18px; margin-bottom: 18px; font-size: .95rem;
+    }
+    .kd-summary.kd-warn { background: #fffbeb; border-color: rgba(217,119,6,.35); color: #92400e; }
+    .kd-note { margin-top: 6px; font-size: .82rem; opacity: .9; }
+    .badge-bloom {
+        background: rgba(168,85,247,.14); color: #7c3aed; border: 1px solid rgba(168,85,247,.3);
+        padding: 4px 11px; border-radius: 6px; font-size: .95rem; font-weight: 700;
+    }
+    .badge-canhbao {
+        background: #fef2f2; color: #b91c1c; border: 1px solid rgba(220,38,38,.3);
+        padding: 4px 11px; border-radius: 6px; font-size: .95rem; font-weight: 700;
+    }
+    /* Thẻ câu có cảnh báo: viền đỏ để giảng viên thấy ngay, không phải dò từng câu */
+    .q-card-warn { border-color: rgba(220,38,38,.45) !important; box-shadow: 0 4px 16px rgba(220,38,38,.08); }
+    .trung-lap-box {
+        margin: 0 20px 12px; padding: 10px 14px; border-radius: 10px;
+        background: #fffbeb; border: 1px solid rgba(217,119,6,.3); color: #92400e;
+        font-size: .9rem;
+    }
+    .trung-lap-cau { margin-top: 4px; font-style: italic; color: #78350f; }
+    .btn-loai-bo {
+        background: #fff; border: 1px solid #dc2626; color: #dc2626;
+        padding: 5px 12px; border-radius: 8px; font-weight: 700; cursor: pointer;
+        transition: all .2s;
+    }
+    .btn-loai-bo:hover { background: #dc2626; color: #fff; }
+    /* Câu đã bị loại bỏ: mờ đi + gạch chéo, nhưng vẫn xem lại được (bấm lần nữa để khôi phục) */
+    .q-card.da-loai { opacity: .5; filter: grayscale(1); }
+    .q-card.da-loai .btn-loai-bo { background: #16a34a; border-color: #16a34a; color: #fff; }
+
+    /* DIFFICULTY BADGES */
+    .badge-chuong { background: rgba(102,126,234,0.15); color: #2563eb; border: 1px solid rgba(102,126,234,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+    .badge-de  { background:rgba(56,239,125,0.15); color:#16a34a; border:1px solid rgba(56,239,125,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+    .badge-tb  { background:rgba(255,193,7,0.15); color:#d97706; border:1px solid rgba(255,193,7,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+    .badge-kho { background:rgba(255,107,107,0.15); color:#dc2626; border:1px solid rgba(255,107,107,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+
+    /* OPTIONS VIEW */
+    .opt-view {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+        padding: 10px 14px; border-radius: 10px;
+        margin-bottom: 0; height: 100%;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        transition: all 0.2s;
+    }
+    .opt-view.correct {
+        background: rgba(56,239,125,0.08);
+        border-color: rgba(56,239,125,0.3);
+    }
+    .opt-letter {
+        width: 28px; height: 28px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 0.8rem; flex-shrink: 0;
+        background: #e2e8f0; color: #aaa;
+    }
+    .opt-view.correct .opt-letter { background: rgba(56,239,125,0.2); color: #16a34a; }
+    .opt-text { font-size: 0.9rem; color: #475569; }
+    .opt-view.correct .opt-text { color: #16a34a; font-weight: 600; }
+    .correct-mark { margin-left: auto; color: #16a34a; font-size: 0.75rem; display: flex; align-items: center; gap: 4px; }
+
+    /* GIẢI THÍCH BLOOM */
+    .giai-thich-bloom {
+        margin-top: 12px; padding: 12px 14px;
+        background: rgba(102,126,234,0.06); border: 1px solid rgba(102,126,234,0.15);
+        border-radius: 10px; font-size: 0.82rem; color: #2563eb; line-height: 1.6;
+    }
+
+    /* OPTIONS EDIT */
+    .opt-edit-group { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .opt-badge { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.82rem; flex-shrink: 0; }
+    .opt-a { background:rgba(102,126,234,0.2); color:#2563eb; }
+    .opt-b { background:rgba(56,239,125,0.2);  color:#16a34a; }
+    .opt-c { background:rgba(255,193,7,0.2);   color:#d97706; }
+    .opt-d { background:rgba(255,107,107,0.2); color:#dc2626; }
+    .answer-radio-group {
+        display: flex; align-items: center; gap: 15px;
+        background: rgba(56,239,125,0.05); border: 1px solid rgba(56,239,125,0.15);
+        border-radius: 10px; padding: 10px 16px; margin-top: 10px;
+    }
+    .radio-item { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    .radio-item input { accent-color: #16a34a; width: 15px; height: 15px; }
+    .radio-item span { font-weight: 700; color: #475569; }
+
+    /* BUTTONS */
+    .btn-edit-toggle, .btn-toggle-all {
+        padding: 6px 14px; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+        cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 5px;
+    }
+    .btn-edit-toggle, .btn-toggle-all { border: 1px solid rgba(255,193,7,0.3); background: rgba(255,193,7,0.1); color: #d97706; }
+    .btn-edit-toggle:hover, .btn-toggle-all:hover { background: rgba(255,193,7,0.2); }
+    .btn-edit-toggle.done, .btn-toggle-all.active { border-color: rgba(56,239,125,0.3); background: rgba(56,239,125,0.1); color: #16a34a; }
+
+    /* VIEW/EDIT MODE */
+    .view-mode { display: block; }
+    .edit-mode { display: none; }
+    .q-card.editing .view-mode { display: none; }
+    .q-card.editing .edit-mode { display: block; }
+
+    /* SAVE BAR TWEAKED FOR SIDEBAR LAYOUT */
+    .save-bar {
+        position: fixed; bottom: 0; left: 0; right: 0;
+        background: rgba(255,255,255,0.97); backdrop-filter: blur(20px);
+        border-top: 1px solid #f1f5f9;
+        padding: 15px 30px; display: flex; justify-content: center;
+        align-items: center; gap: 15px; z-index: 1050;
+    }
+    .btn-save {
+        background: linear-gradient(135deg, #39f0a4, #41b36d); border: none; color: #ffffff;
+        padding: 12px 40px; font-weight: 700; border-radius: 12px; font-size: 1rem;
+        transition: all 0.3s; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    }
+    .btn-save:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(17,153,142,0.4); color: #ffffff; background: rgb(11, 181, 14);}
+    .btn-cancel-link {
+        background:linear-gradient(135deg, #c35252, #c67a3c);; border: 1px solid rgba(255,255,255,0.1);
+        color: #f3f3f3; padding: 12px 25px; font-weight: 600; border-radius: 12px;
+        transition: all 0.3s; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-cancel-link:hover { transform: translateY(-2px); background: rgb(220, 7, 7); color: #ffffff; }
+
+    @keyframes fadeIn {
+        from { opacity:0; transform:translateY(15px); }
+        to   { opacity:1; transform:translateY(0); }
+    }
+
+    /* AUTOCOMPLETE MÔN HỌC */
+    .hp-ac { position: relative; }
+    .hp-suggest {
+        position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px);
+        margin: 0; padding: 4px; list-style: none;
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+        box-shadow: 0 12px 30px rgba(15,23,42,0.15);
+        max-height: 260px; overflow-y: auto;
+    }
+    .hp-suggest[hidden] { display: none; }
+    .hp-suggest li {
+        padding: 9px 12px; border-radius: 8px; cursor: pointer;
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .hp-suggest li:hover, .hp-suggest li.active { background: #eff6ff; }
+    .hp-suggest .hp-ten { color: #0f172a; font-weight: 600; }
+    .hp-suggest .hp-ma  {
+        color: #2563eb; font-size: 0.78rem; font-weight: 700;
+        background: #dbeafe; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+    }
+    .hp-suggest .hp-empty { color: #94a3b8; cursor: default; }
+    .hp-suggest .hp-empty:hover { background: transparent; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:900px; padding-bottom: 100px;">
+    <form action="/save_exam" method="POST" id="mainForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="so_luong_thuc_te" value="{{ tong_so_cau }}">
+        <input type="hidden" name="tong_so_cau" value="{{ tong_so_cau }}">
+
+        {# ===== TỔNG QUAN KIỂM DUYỆT — cho biết ngay có bao nhiêu câu cần xem lại ===== #}
+        {% if thong_ke %}
+        <div class="kd-summary {% if thong_ke.can_xem %}kd-warn{% endif %}">
+            <div>
+                <i class="fas {% if thong_ke.can_xem %}fa-triangle-exclamation{% else %}fa-circle-check{% endif %} me-2"></i>
+                <strong>Kiểm duyệt tự động:</strong>
+                {{ thong_ke.dat }}/{{ thong_ke.tong }} câu đạt
+                {% if thong_ke.can_xem %}
+                    · <strong>{{ thong_ke.can_xem }} câu cần bạn xem lại</strong> (viền đỏ bên dưới)
+                {% endif %}
+                {% if thong_ke.trung_lap %}
+                    · đã tự loại {{ thong_ke.trung_lap }} câu trùng y nguyên
+                {% endif %}
+            </div>
+            <div class="kd-note">
+                Câu có cảnh báo vẫn hiển thị để bạn sửa hoặc loại bỏ. Câu thiếu giải thích,
+                thiếu Bloom/độ khó, sai đáp án hoặc là câu hỏi yếu sẽ <strong>không được đưa vào
+                Ngân hàng câu hỏi</strong> cho tới khi bạn sửa xong.
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="result-header">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label-dark"><i class="fas fa-book me-1"></i>Tên môn học</label>
+                    {# Autocomplete tùy biến: gõ tới đâu lọc danh mục học phần tới đó (như tìm kiếm),
+                       mỗi gợi ý hiện "Tên — Mã" nên môn TRÙNG TÊN nhiều mã vẫn chọn đúng được.
+                       Cho phép gõ tên môn TỰ DO không có trong danh mục -> khi đó để trống mã môn. #}
+                    <div class="hp-ac">
+                        <input type="text" name="ten_mon_hoc" id="iTenMon" class="form-control-dark"
+                               autocomplete="off" required
+                               placeholder="Gõ để tìm & chọn học phần trong danh sách...">
+                        <ul id="hpSuggest" class="hp-suggest" hidden></ul>
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label-dark"><i class="fas fa-hashtag me-1"></i>Mã môn</label>
+                    <input type="text" class="form-control-dark inp-ro" name="ma_mon" id="iMaMon" placeholder="Tự điền theo môn đã chọn" readonly tabindex="-1">
+                    <div class="text-muted" style="font-size:0.72rem;margin-top:4px;" id="maMonHint"></div>
+                </div>
+            </div>
+            <input type="hidden" name="ten_de_thi" id="hTenDeThi">
+        </div>
+
+        {% for q in cau_hoi_list %}
+        {# Bắt lấy số thứ tự câu hỏi TẠI ĐÂY. Bên trong vòng lặp 4 phương án bên
+           dưới, `loop.index` sẽ trỏ vào vòng lặp ĐÓ (1..4) chứ không còn là số
+           câu hỏi nữa — dùng nhầm thì mọi câu đều sinh ra radio trùng tên
+           dap_an_1..dap_an_4, và đáp án giáo viên sửa không bao giờ được đọc. #}
+        {% set qi = loop.index %}
+        <div class="q-card {% if q.canh_bao %}q-card-warn{% endif %}" id="card_{{ loop.index }}">
+            <div class="q-card-header">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="q-num"><i class="fas fa-circle-dot me-1"></i> Câu {{ loop.index }}</span>
+                    <span class="badge-chuong">Chương {{ q.chuong }}</span>
+
+                    {% if q.do_kho == 'Dễ' %} <span class="badge-de">Dễ</span>
+                    {% elif q.do_kho == 'Trung bình' %} <span class="badge-tb">Trung bình</span>
+                    {% else %} <span class="badge-kho">Khó</span> {% endif %}
+
+                    {% if q.bloom %}<span class="badge-bloom"><i class="fas fa-brain me-1"></i>{{ q.bloom }}</span>{% endif %}
+
+                    {# Cảnh báo do hệ thống kiểm duyệt phát hiện #}
+                    {% for ma in q.canh_bao or [] %}
+                    <span class="badge-canhbao"><i class="fas fa-triangle-exclamation me-1"></i>{{ canh_bao_nhan.get(ma, ma) }}</span>
+                    {% endfor %}
+                </div>
+
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn-edit-toggle" id="btnEdit_{{ loop.index }}">
+                        <i class="fas fa-edit me-1"></i>Sửa
+                    </button>
+                    <button type="button" class="btn-loai-bo" id="btnLoai_{{ loop.index }}"
+                            onclick="toggleLoaiBo({{ loop.index }})">
+                        <i class="fas fa-ban me-1"></i><span>Loại bỏ</span>
+                    </button>
+                </div>
+            </div>
+
+            {# Câu nghi trùng: hiện câu đối chiếu để giảng viên tự so sánh #}
+            {% if q.trung_voi %}
+            <div class="trung-lap-box">
+                <div><i class="fas fa-clone me-1"></i>
+                    <strong>Nghi trùng {{ q.trung_voi.do_giong }}%</strong> — {{ q.trung_voi.o_dau }}:</div>
+                <div class="trung-lap-cau">“{{ q.trung_voi.noi_dung }}”</div>
+            </div>
+            {% endif %}
+
+            <div class="q-card-body">
+                <div class="view-mode" id="view_{{ loop.index }}">
+                    <div class="q-text">{{ q.cau_hoi }}</div>
+                    {% set _ml = [q.cau_a|default('')|length, q.cau_b|default('')|length, q.cau_c|default('')|length, q.cau_d|default('')|length]|max %}
+                    {% if _ml <= 30 %}{% set _col = 'col-6 col-md-3' %}{% elif _ml <= 80 %}{% set _col = 'col-12 col-sm-6' %}{% else %}{% set _col = 'col-12' %}{% endif %}
+                    <div class="row g-2">
+                        {% for opt, val in [('A',q.cau_a),('B',q.cau_b),('C',q.cau_c),('D',q.cau_d)] %}
+                        <div class="{{ _col }}">
+                            <div class="opt-view {% if (q.dap_an_dung or '')|trim|upper == opt %}correct{% endif %}">
+                                <div class="opt-letter">{{ opt }}</div>
+                                <div class="opt-text" style="flex:1 1 0; min-width:0;">{{ val }}</div>
+                                {% if (q.dap_an_dung or '')|trim|upper == opt %}
+                                <div class="correct-mark"><i class="fas fa-check-circle"></i></div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="edit-mode" id="edit_{{ loop.index }}">
+                    <div class="mb-3">
+                        <label class="form-label-dark">Nội dung câu hỏi</label>
+                        <textarea class="form-control-dark" name="noi_dung_{{ loop.index }}" id="inp_nd_{{ loop.index }}" rows="2">{{ q.cau_hoi }}</textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <div class="opt-edit-group">
+                                <div class="opt-badge opt-a">A</div>
+                                <input type="text" class="form-control-dark" name="cau_a_{{ loop.index }}" id="inp_a_{{ loop.index }}" value="{{ q.cau_a }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <div class="opt-edit-group">
+                                <div class="opt-badge opt-b">B</div>
+                                <input type="text" class="form-control-dark" name="cau_b_{{ loop.index }}" id="inp_b_{{ loop.index }}" value="{{ q.cau_b }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <div class="opt-edit-group">
+                                <div class="opt-badge opt-c">C</div>
+                                <input type="text" class="form-control-dark" name="cau_c_{{ loop.index }}" id="inp_c_{{ loop.index }}" value="{{ q.cau_c }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <div class="opt-edit-group">
+                                <div class="opt-badge opt-d">D</div>
+                                <input type="text" class="form-control-dark" name="cau_d_{{ loop.index }}" id="inp_d_{{ loop.index }}" value="{{ q.cau_d }}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="answer-radio-group">
+                        <span class="form-label-light mb-0"><i class="fas fa-check-circle me-1" style="color:#16a34a"></i>Đáp án đúng:</span>
+                        {% for opt in ['A','B','C','D'] %}
+                        <label class="radio-item">
+                            <input type="radio" name="dap_an_{{ qi }}" id="inp_da_{{ qi }}_{{ opt }}" value="{{ opt }}" {% if (q.dap_an_dung or '')|trim|upper == opt %}checked{% endif %}>
+                            <span>{{ opt }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {# Giải thích: BẮT BUỘC để lưu vào ngân hàng -> cho sửa ngay tại đây #}
+                <div class="mt-3">
+                    <label class="form-label-dark" style="color:#64748b;">
+                        <i class="fas fa-lightbulb me-1"></i>Giải thích 
+                    </label>
+                    <textarea class="form-control-dark" name="giai_thich_{{ loop.index }}" rows="2"
+                              placeholder="Nêu ngắn gọn vì sao đáp án đúng, dựa trên tài liệu">{{ q.giai_thich or '' }}</textarea>
+                </div>
+
+                <input type="hidden" name="chuong_{{ loop.index }}" value="{{ q.chuong }}">
+                <input type="hidden" name="do_kho_{{ loop.index }}" value="{{ q.do_kho }}">
+                <input type="hidden" name="bloom_{{ loop.index }}" value="{{ q.bloom or '' }}">
+                {# =1 khi giảng viên bấm "Loại bỏ" -> save_exam bỏ qua câu này #}
+                <input type="hidden" name="loai_bo_{{ loop.index }}" id="loai_{{ loop.index }}" value="0">
+                <input type="hidden" name="noi_dung_sync_{{ loop.index }}" id="h_nd_{{ loop.index }}" value="{{ q.cau_hoi }}">
+                <input type="hidden" name="cau_a_sync_{{ loop.index }}" id="h_a_{{ loop.index }}" value="{{ q.cau_a }}">
+                <input type="hidden" name="cau_b_sync_{{ loop.index }}" id="h_b_{{ loop.index }}" value="{{ q.cau_b }}">
+                <input type="hidden" name="cau_c_sync_{{ loop.index }}" id="h_c_{{ loop.index }}" value="{{ q.cau_c }}">
+                <input type="hidden" name="cau_d_sync_{{ loop.index }}" id="h_d_{{ loop.index }}" value="{{ q.cau_d }}">
+                <input type="hidden" name="dap_an_sync_{{ loop.index }}" id="h_da_{{ loop.index }}" value="{{ q.dap_an_dung }}">
+            </div>
+        </div>
+        {% endfor %}
+    </form>
+</div>
+
+<div class="save-bar">
+    <a href="/" class="btn-cancel-link">
+        <i class="fas fa-times"></i> Hủy bỏ
+    </a>
+    <button type="button" class="btn-save" id="btnSave">
+        <i class="fas fa-cloud-upload-alt"></i> Lưu 
+    </button>
+</div>
+
+<div class="toast-container position-fixed p-3" style="bottom:80px;right:16px;z-index:9999;">
+    <div id="myToast" class="toast align-items-center text-white border-0" style="border-radius:12px;min-width:280px;">
+        <div class="d-flex">
+            <div class="toast-body fw-bold" id="toastMsg"></div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ĐÃ XÓA hàm toggleNewSubject() vì không còn cần thiết nữa
+
+var TOTAL_Q  = parseInt("{{ tong_so_cau }}");
+var allEditing = false;
+
+// ===== KIỂM DUYỆT: loại bỏ / khôi phục 1 câu hỏi =====
+// Không xóa khỏi DOM (giảng viên có thể đổi ý) — chỉ bật cờ loai_bo_<i>=1 để
+// save_exam bỏ qua câu đó khi lưu.
+function toggleLoaiBo(i) {
+    var card = document.getElementById('card_' + i);
+    var flag = document.getElementById('loai_' + i);
+    var btn  = document.getElementById('btnLoai_' + i);
+    if (!card || !flag || !btn) return;
+    var daLoai = flag.value === '1';
+    flag.value = daLoai ? '0' : '1';
+    card.classList.toggle('da-loai', !daLoai);
+    btn.querySelector('span').textContent = daLoai ? 'Loại bỏ' : 'Khôi phục';
+    btn.querySelector('i').className = daLoai ? 'fas fa-ban me-1' : 'fas fa-rotate-left me-1';
+}
+
+// ===== AUTOCOMPLETE MÔN HỌC + TỰ ĐIỀN MÃ MÔN =====
+// 1 tên môn có thể có NHIỀU mã học phần -> gợi ý hiện "Tên — Mã", người dùng chọn
+//   đúng dòng nào thì điền mã của dòng đó (KHÔNG suy theo tên nữa, tránh dính mã đầu tiên).
+// Cho phép gõ tên môn TỰ DO không có trong danh mục -> để trống mã môn.
+var HOC_PHAN_LIST = {{ hoc_phan | tojson }};
+function _norm(s) { return (s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+
+// Mã được "chốt" khi người dùng chọn 1 dòng gợi ý cụ thể. Nếu sau đó gõ lệch tên thì bỏ chốt.
+var maDaChon  = '';   // mã học phần đã chọn từ gợi ý
+var tenDaChon = '';   // tên ứng với mã đã chọn (đã chuẩn hóa)
+
+function capNhatHintMa() {
+    var maEl = document.getElementById('iMaMon');
+    var hint = document.getElementById('maMonHint');
+    var raw  = (document.getElementById('iTenMon').value || '').trim();
+
+    // Còn giữ lựa chọn nếu tên hiện tại vẫn khớp tên đã chọn.
+    var ma = (maDaChon && _norm(raw) === tenDaChon) ? maDaChon : '';
+    maEl.value = ma;
+    if (!hint) return;
+    if (ma) {
+        hint.textContent = 'Mã học phần: ' + ma;
+        hint.style.color = '#16a34a';
+    } else if (raw) {
+        var soMa = HOC_PHAN_LIST.filter(function(h){ return _norm(h.ten_hoc_phan) === _norm(raw); }).length;
+        if (soMa > 1) {
+            hint.textContent = 'Môn này có ' + soMa + ' mã — chọn 1 dòng trong gợi ý để lấy đúng mã';
+            hint.style.color = '#d97706';
+        } else {
+            hint.textContent = 'Chưa khớp học phần nào — hãy chọn trong danh sách gợi ý';
+            hint.style.color = '#9ca3af';
+        }
+    } else {
+        hint.textContent = '';
+    }
+}
+
+function escHtml(s) {
+    return (s || '').replace(/[&<>"']/g, function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+}
+
+function locGoiY(query) {
+    var q = _norm(query);
+    if (!q) return HOC_PHAN_LIST.slice(0, 50);
+    return HOC_PHAN_LIST.filter(function(h){
+        return _norm(h.ten_hoc_phan).indexOf(q) > -1
+            || _norm(h.ma_hoc_phan).indexOf(q) > -1;
+    }).slice(0, 50);
+}
+
+function dongGoiY() {
+    var box = document.getElementById('hpSuggest');
+    box.hidden = true;
+    box.innerHTML = '';
+}
+
+function moGoiY() {
+    var box = document.getElementById('hpSuggest');
+    var ds  = locGoiY(document.getElementById('iTenMon').value);
+    if (!ds.length) {
+        box.innerHTML = '<li class="hp-empty">Không có học phần khớp — hãy chọn đúng trong danh sách</li>';
+        box.hidden = false;
+        return;
+    }
+    box.innerHTML = ds.map(function(h){
+        return '<li data-ma="' + escHtml(h.ma_hoc_phan) + '" data-ten="' + escHtml(h.ten_hoc_phan) + '">'
+             + '<span class="hp-ten">' + escHtml(h.ten_hoc_phan) + '</span>'
+             + (h.ma_hoc_phan ? '<span class="hp-ma">' + escHtml(h.ma_hoc_phan) + '</span>' : '')
+             + '</li>';
+    }).join('');
+    box.hidden = false;
+}
+
+function chonGoiY(li) {
+    var inp = document.getElementById('iTenMon');
+    inp.value  = li.getAttribute('data-ten') || '';
+    maDaChon   = li.getAttribute('data-ma') || '';
+    tenDaChon  = _norm(inp.value);
+    capNhatHintMa();
+    dongGoiY();
+}
+
+// Giữ tương thích tên hàm cũ đang được gắn sự kiện.
+function autoFillMaMon() { capNhatHintMa(); }
+
+// ===== TOAST =====
+function showToast(msg, type) {
+    var toastEl = document.getElementById('myToast');
+    var msgEl   = document.getElementById('toastMsg');
+    msgEl.innerHTML = msg;
+    if (type === 'success') {
+        toastEl.style.background = 'linear-gradient(135deg,#11998e,#16a34a)';
+        toastEl.style.color = '#0a0a0f';
+    } else if (type === 'warning') {
+        toastEl.style.background = 'linear-gradient(135deg,#f7971e,#ffd200)';
+        toastEl.style.color = '#1a1a1a';
+    } else {
+        toastEl.style.background = 'linear-gradient(135deg,#f5576c,#7c3aed)';
+        toastEl.style.color = 'white';
+    }
+    new bootstrap.Toast(toastEl, { delay: 3500 }).show();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // AUTOCOMPLETE + TỰ ĐIỀN MÃ MÔN khi gõ/chọn tên môn học
+    var tenMonEl = document.getElementById('iTenMon');
+    var suggEl   = document.getElementById('hpSuggest');
+    if (tenMonEl) {
+        // Gõ -> bỏ chốt mã cũ (sẽ chốt lại khi chọn dòng gợi ý), cập nhật hint + mở gợi ý.
+        tenMonEl.addEventListener('input', function() {
+            maDaChon = ''; tenDaChon = '';
+            capNhatHintMa();
+            moGoiY();
+        });
+        tenMonEl.addEventListener('focus', moGoiY);
+        // Điều hướng bàn phím cơ bản (lên/xuống/Enter/Esc).
+        tenMonEl.addEventListener('keydown', function(e) {
+            if (suggEl.hidden) return;
+            var items = Array.prototype.slice.call(suggEl.querySelectorAll('li[data-ma], li[data-ten]'));
+            if (!items.length) return;
+            var idx = items.findIndex(function(li){ return li.classList.contains('active'); });
+            if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+            else if (e.key === 'Enter') {
+                if (idx > -1) { e.preventDefault(); chonGoiY(items[idx]); }
+                return;
+            }
+            else if (e.key === 'Escape') { dongGoiY(); return; }
+            else return;
+            items.forEach(function(li){ li.classList.remove('active'); });
+            if (items[idx]) { items[idx].classList.add('active'); items[idx].scrollIntoView({ block: 'nearest' }); }
+        });
+    }
+    if (suggEl) {
+        // Dùng mousedown để chọn trước khi input mất focus (blur).
+        suggEl.addEventListener('mousedown', function(e) {
+            var li = e.target.closest('li[data-ma], li[data-ten]');
+            if (li) { e.preventDefault(); chonGoiY(li); }
+        });
+    }
+    // Bấm ra ngoài -> đóng gợi ý.
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.hp-ac')) dongGoiY();
+    });
+
+    // GẮN SỰ KIỆN NÚT SỬA từng câu
+    for (var i = 1; i <= TOTAL_Q; i++) {
+        (function(idx) {
+            var btn = document.getElementById('btnEdit_' + idx);
+            if (btn) {
+                btn.addEventListener('click', function() { toggleEdit(idx); });
+            }
+        })(i);
+    }
+
+    // NÚT SỬA TẤT CẢ (đã ẩn khỏi giao diện — chỉ gắn nếu còn tồn tại)
+    var btnToggleAll = document.getElementById('btnToggleAll');
+    if (btnToggleAll) btnToggleAll.addEventListener('click', function() {
+        allEditing = !allEditing;
+        for (var i = 1; i <= TOTAL_Q; i++) {
+            var card = document.getElementById('card_' + i);
+            var btn  = document.getElementById('btnEdit_' + i);
+            if (!card || !btn) continue;
+            if (allEditing) {
+                card.classList.add('editing');
+                btn.innerHTML = '<i class="fas fa-check me-1"></i>Xong';
+                btn.classList.add('done');
+            } else {
+                applyEdit(i);
+                card.classList.remove('editing');
+                btn.innerHTML = '<i class="fas fa-edit me-1"></i>Sửa';
+                btn.classList.remove('done');
+            }
+        }
+        if (allEditing) {
+            this.innerHTML = '<i class="fas fa-times me-1"></i>Tắt sửa tất cả';
+            this.classList.add('active');
+        } else {
+            this.innerHTML = '<i class="fas fa-edit me-1"></i>Bật sửa tất cả';
+            this.classList.remove('active');
+        }
+    });
+
+    // NÚT LƯU
+    document.getElementById('btnSave').addEventListener('click', function() {
+        syncAll();
+        var form  = document.getElementById('mainForm');
+        var monEl = form.querySelector('[name="ten_mon_hoc"]');
+
+        // Kiểm tra NGAY tại trang để KHÔNG mất đề vừa tạo: nếu thiếu thì cuộn
+        // tới đúng ô còn trống, focus và báo toast — không gửi lên server.
+        function cuonToiVaBao(el, thongBao) {
+            showToast(thongBao, 'warning');
+            el.classList.add('field-invalid');
+            el.focus({ preventScroll: true });
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.addEventListener('input', function huy() {
+                el.classList.remove('field-invalid');
+                el.removeEventListener('input', huy);
+            });
+        }
+
+        if (!monEl.value.trim()) {
+            cuonToiVaBao(monEl, 'Vui lòng chọn học phần trước khi lưu đề!');
+            return;
+        }
+        // BẮT BUỘC: môn phải là 1 học phần trong danh mục (nếu danh mục có dữ liệu)
+        var tenMonNorm  = _norm(monEl.value);
+        var khopHocPhan = HOC_PHAN_LIST.some(function(h){ return _norm(h.ten_hoc_phan) === tenMonNorm; });
+        if (HOC_PHAN_LIST.length && !khopHocPhan) {
+            cuonToiVaBao(monEl, 'Vui lòng chọn đúng học phần trong danh sách gợi ý (không tự nhập môn mới)!');
+            return;
+        }
+        // Tên đề (nhãn trong thư viện) tự sinh: "Mã môn - Tên môn" (hoặc chỉ Tên môn)
+        var maMon  = (document.getElementById('iMaMon').value || '').trim();
+        var tenMon = monEl.value.trim();
+        document.getElementById('hTenDeThi').value = maMon ? (maMon + ' - ' + tenMon) : tenMon;
+        form.submit();
+    });
+});
+
+function toggleEdit(idx) {
+    var card = document.getElementById('card_' + idx);
+    var btn  = document.getElementById('btnEdit_' + idx);
+    if (!card || !btn) return;
+    if (card.classList.contains('editing')) {
+        applyEdit(idx);
+        card.classList.remove('editing');
+        btn.innerHTML = '<i class="fas fa-edit me-1"></i>Sửa';
+        btn.classList.remove('done');
+    } else {
+        card.classList.add('editing');
+        btn.innerHTML = '<i class="fas fa-check me-1"></i>Xong';
+        btn.classList.add('done');
+    }
+}
+
+function applyEdit(idx) {
+    var nd = document.getElementById('inp_nd_' + idx);
+    var a  = document.querySelector('[name="cau_a_' + idx + '"]');
+    var b  = document.querySelector('[name="cau_b_' + idx + '"]');
+    var c  = document.querySelector('[name="cau_c_' + idx + '"]');
+    var d  = document.querySelector('[name="cau_d_' + idx + '"]');
+    var da = document.querySelector('[name="dap_an_' + idx + '"]:checked');
+    if (!nd) return;
+
+    var ndVal = nd.value;
+    var aVal  = a  ? a.value  : '';
+    var bVal  = b  ? b.value  : '';
+    var cVal  = c  ? c.value  : '';
+    var dVal  = d  ? d.value  : '';
+    var hDaEl = document.getElementById('h_da_' + idx);
+    var daVal = da ? da.value : (hDaEl && hDaEl.value ? hDaEl.value : 'A');
+
+    var viewDiv = document.getElementById('view_' + idx);
+    if (viewDiv) {
+        var qText = viewDiv.querySelector('.q-text');
+        if (qText) qText.textContent = ndVal;
+        var opts   = { A: aVal, B: bVal, C: cVal, D: dVal };
+        var labels = ['A','B','C','D'];
+        var optEls = viewDiv.querySelectorAll('.opt-view');
+        optEls.forEach(function(el, i) {
+            var letter    = labels[i];
+            var isCorrect = (letter === daVal);
+            el.className  = 'opt-view' + (isCorrect ? ' correct' : '');
+            var letterEl  = el.querySelector('.opt-letter');
+            var textEl    = el.querySelector('.opt-text');
+            var markEl    = el.querySelector('.correct-mark');
+            if (letterEl) letterEl.textContent = letter;
+            if (textEl)   textEl.textContent   = opts[letter];
+            if (isCorrect && !markEl) {
+                var mark = document.createElement('div');
+                mark.className = 'correct-mark';
+                mark.innerHTML = '<i class="fas fa-check-circle"></i>';
+                el.appendChild(mark);
+            } else if (!isCorrect && markEl) {
+                markEl.remove();
+            }
+        });
+    }
+
+    var hNd = document.getElementById('h_nd_' + idx);
+    var hA  = document.getElementById('h_a_'  + idx);
+    var hB  = document.getElementById('h_b_'  + idx);
+    var hC  = document.getElementById('h_c_'  + idx);
+    var hD  = document.getElementById('h_d_'  + idx);
+    var hDa = document.getElementById('h_da_' + idx);
+    if (hNd) hNd.value = ndVal;
+    if (hA)  hA.value  = aVal;
+    if (hB)  hB.value  = bVal;
+    if (hC)  hC.value  = cVal;
+    if (hD)  hD.value  = dVal;
+    if (hDa) hDa.value = daVal;
+}
+
+function syncAll() {
+    for (var i = 1; i <= TOTAL_Q; i++) {
+        applyEdit(i);
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,8 @@
+{#
+  Layout RỖNG dùng cho render fragment (AJAX) — chỉ xuất 3 block, KHÔNG có
+  khung base.html (navbar/footer/CSS chung). Trang Cài đặt phòng / Giám sát
+  dùng khi ?frag=1 để tráo view tại chỗ, không tải lại toàn trang.
+#}
+{% block extra_css %}{% endblock %}
+{% block content %}{% endblock %}
+{% block extra_js %}{% endblock %}

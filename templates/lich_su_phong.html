@@ -1,0 +1,235 @@
+{#
+  lich_su_phong.html — BẢNG ĐIỂM TỔNG KẾT của một phòng đã thi xong.
+
+  Xếp hạng thí sinh và phân loại học lực (xuất sắc >= 8.5, giỏi 7–8.5, khá
+  5.5–7, trung bình 4–5.5, yếu < 4). Chỉ tính trên bài ĐÃ NỘP — người bỏ dở
+  không bị đưa vào điểm trung bình, nếu không cả lớp bị kéo tụt oan.
+#}
+{% extends "base.html" %}
+
+{% block title %}Thống Kê Phòng Thi - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-header {
+        background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(240,147,251,0.08));
+        border: 1px solid rgba(102,126,234,0.25);
+        border-radius: 20px; padding: 30px;
+        margin-bottom: 25px; animation: fadeIn 0.5s ease;
+    }
+    .stat-card {
+        background: #ffffff; border: 1px solid #f1f5f9;
+        border-radius: 16px; padding: 20px; height: 100%;
+        display: flex; flex-direction: column; justify-content: center;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: all 0.3s;
+    }
+    .stat-card:hover { transform: translateY(-5px); border-color: rgba(102,126,234,0.3); }
+    .stat-icon { font-size: 2rem; margin-bottom: 15px; opacity: 0.8; }
+    .stat-value { font-size: 2rem; font-weight: 800; color: #0f172a; line-height: 1; margin-bottom: 5px; }
+    .stat-label { color: #64748b; font-size: 0.85rem; text-transform: uppercase; font-weight: 600; letter-spacing: 1px; }
+
+    /* Progress Bar Phổ điểm */
+    .progress-bar-custom { height: 10px; border-radius: 5px; background: #e2e8f0; overflow: hidden; margin-top: 8px; }
+    .progress-fill { height: 100%; border-radius: 5px; }
+    .rank-xs { background: #a855f7; }
+    .rank-g  { background: #16a34a; }
+    .rank-k  { background: #d97706; }
+    .rank-tb { background: #f97316; }
+    .rank-y  { background: #ef4444; }
+
+    /* Table */
+    .table-wrapper {
+        background: #ffffff; border: 1px solid #e2e8f0;
+        border-radius: 20px; overflow: hidden; padding: 20px; margin-top: 30px;
+    }
+    /* Khung viền + bo góc cho bảng (đồng bộ với .data-table dùng chung) */
+    .table-wrapper .table-responsive {
+        border: 1px solid var(--table-border); border-radius: var(--radius-lg); overflow: hidden;
+    }
+    .table-dark-custom { width: 100%; border-collapse: collapse; color: var(--text-secondary); font-size: 0.875rem; }
+    .table-dark-custom thead th {
+        background: transparent; color: var(--text-primary);
+        padding: 13px 16px; font-weight: 700; font-size: 0.96rem;
+        border: 1px solid var(--table-border);
+        text-align: left; white-space: nowrap;
+    }
+    .table-dark-custom tbody td {
+        background: transparent; padding: 14px 16px; vertical-align: middle;
+        color: #374151; font-size: 0.88rem; font-weight: 500;
+        border: 1px solid var(--table-border); border-radius: 0;
+    }
+    .table-dark-custom tbody tr { transition: background 0.18s ease; }
+    .table-dark-custom tbody tr:hover td { background: var(--table-hover); }
+    
+    .score-badge {
+        display: inline-block; padding: 5px 12px; border-radius: 8px;
+        font-weight: 800; font-size: 1.1rem; min-width: 60px; text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 1200px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-1">Thống Kê: {{ phong.ten_phong }}</h2>
+            <div class="text-muted"><i class="fas fa-book me-1"></i> Môn: <strong>{{ phong.ten_mon }}</strong> &nbsp;|&nbsp; <i class="fas fa-file-alt me-1"></i> Đề thi: <strong>{{ phong.ten_de_thi }}</strong></div>
+        </div>
+        
+        <div class="d-flex gap-2 flex-wrap no-print">
+            <a href="/phan_tich_phong/{{ phong.id }}" class="btn btn-primary" style="border-radius: 10px;">
+                <i class="fas fa-chart-column me-1"></i> Thống kê điểm
+            </a>
+            <a href="/lich_su_phong/{{ phong.id }}/excel" class="btn btn-success" style="border-radius: 10px;">
+                <i class="fas fa-file-excel me-1"></i> Tải Excel
+            </a>
+            <a href="/quan_ly_phong/{{ phong.id }}" class="btn btn-outline-light" style="border-radius: 10px;">
+                <i class="fas fa-users me-1"></i> Quản lý phòng thi
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="stat-card" style="border-bottom: 3px solid #2563eb;">
+                <div class="stat-icon" style="color: #2563eb;"><i class="fas fa-users"></i></div>
+                <div class="stat-value">{{ stats.tong }}</div>
+                <div class="stat-label">Tổng thí sinh</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card" style="border-bottom: 3px solid #16a34a;">
+                <div class="stat-icon" style="color: #16a34a;"><i class="fas fa-check-circle"></i></div>
+                <div class="stat-value">{{ stats.da_nop }}</div>
+                <div class="stat-label">Đã nộp bài</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card" style="border-bottom: 3px solid #d97706;">
+                <div class="stat-icon" style="color: #d97706;"><i class="fas fa-star"></i></div>
+                <div class="stat-value">{{ stats.diem_tb or '0.0' }}</div>
+                <div class="stat-label">Điểm trung bình</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card" style="border-bottom: 3px solid #dc2626;">
+                <div class="stat-icon" style="color: #dc2626;"><i class="fas fa-trophy"></i></div>
+                <div class="stat-value">{{ stats.diem_cao or '0.0' }}</div>
+                <div class="stat-label">Điểm cao nhất</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-header">
+        <h4 class="fw-bold text-dark mb-4"><i class="fas fa-chart-pie me-2" style="color: #2563eb;"></i>Phổ Điểm Lớp Học</h4>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-2">
+                <div class="text-dark fw-bold mb-1 d-flex justify-content-between"><span>Xuất sắc (8.5 - 10)</span> <span>{{ stats.xuat_sac }}</span></div>
+                <div class="progress-bar-custom"><div class="progress-fill rank-xs" style="width: {{ pct_xs }}%;"></div></div>
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <div class="text-dark fw-bold mb-1 d-flex justify-content-between"><span>Giỏi (7 - 8.4)</span> <span>{{ stats.gioi }}</span></div>
+                <div class="progress-bar-custom"><div class="progress-fill rank-g" style="width: {{ pct_g }}%;"></div></div>
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <div class="text-dark fw-bold mb-1 d-flex justify-content-between"><span>Khá (5.5 - 6.9)</span> <span>{{ stats.kha }}</span></div>
+                <div class="progress-bar-custom"><div class="progress-fill rank-k" style="width: {{ pct_k }}%;"></div></div>
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <div class="text-dark fw-bold mb-1 d-flex justify-content-between"><span>T.Bình (4 - 5.4)</span> <span>{{ stats.tb }}</span></div>
+                <div class="progress-bar-custom"><div class="progress-fill rank-tb" style="width: {{ pct_tb }}%;"></div></div>
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <div class="text-dark fw-bold mb-1 d-flex justify-content-between"><span>Yếu (< 4)</span> <span>{{ stats.yeu }}</span></div>
+                <div class="progress-bar-custom"><div class="progress-fill rank-y" style="width: {{ pct_yeu }}%;"></div></div>
+            </div>
+            <div class="col-md-6 col-lg-2 text-center" style="border-left: 1px solid #e2e8f0;">
+                <div class="text-muted small text-uppercase fw-bold mb-1">Tỷ lệ Đạt</div>
+                <h3 class="fw-bold mb-0" style="color: #16a34a;">{{ ti_le_dat }}%</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-wrapper">
+        <h4 class="fw-bold text-dark mb-3"><i class="fas fa-list-ol me-2" style="color: #2563eb;"></i>Bảng Xếp Hạng & Điểm Thi</h4>
+        <div class="table-responsive">
+            <table class="table-dark-custom">
+                <thead>
+                    <tr>
+                        <th class="text-center">Xếp Hạng</th>
+                        <th>Họ và Tên</th>
+                        <th>Mã SV</th>
+                        <th>Lớp</th>
+                        <th class="text-center">Thời gian làm bài</th>
+                        <th class="text-center">Số câu đúng</th>
+                        <th class="text-center">Điểm Số</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if thi_sinhs %}
+                        {% for ts in thi_sinhs %}
+                        <tr>
+                            <td class="text-center">
+                                {% if ts.da_nop_bai %}
+                                    {% if ts.rank == 1 %}
+                                        <i class="fas fa-medal fs-3" style="color: #d97706;"></i>
+                                    {% elif ts.rank == 2 %}
+                                        <i class="fas fa-medal fs-4" style="color: #c0c0c0;"></i>
+                                    {% elif ts.rank == 3 %}
+                                        <i class="fas fa-medal fs-5" style="color: #cd7f32;"></i>
+                                    {% else %}
+                                        <span class="fw-bold text-muted">#{{ ts.rank }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="fw-bold text-dark" style="font-size: 1.05rem;">{{ ts.ho_ten }}</div>
+                                {% if not ts.da_nop_bai %}
+                                    <span class="badge bg-warning text-dark mt-1" style="font-size: 0.7rem;">Đang thi...</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted">{{ ts.ma_sv }}</td>
+                            <td class="text-muted">{{ ts.lop }}</td>
+                            <td class="text-center">
+                                {% if ts.da_nop_bai and ts.thoi_gian_lam %}
+                                    {{ (ts.thoi_gian_lam / 60) | int }}p {{ ts.thoi_gian_lam % 60 }}s
+                                {% else %}
+                                    <span class="text-muted">--:--</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center text-dark fw-bold">
+                                {% if ts.da_nop_bai %}
+                                    {{ ts.so_cau_dung }} / {{ ts.tong_so_cau }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if ts.da_nop_bai %}
+                                    {% set d = ts.diem | float %}
+                                    <div class="score-badge" style="background: rgba({% if d>=8.5 %}168,85,247{% elif d>=7 %}56,239,125{% elif d>=5.5 %}255,193,7{% elif d>=4 %}249,115,22{% else %}239,68,68{% endif %}, 0.15); color: {% if d>=8.5 %}#a855f7{% elif d>=7 %}#16a34a{% elif d>=5.5 %}#d97706{% elif d>=4 %}#f97316{% else %}#ef4444{% endif %}; border: 1px solid currentColor;">
+                                        {{ ts.diem }}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="fas fa-clipboard-list fs-1 mb-3 opacity-50"></i>
+                                <h5>Chưa có dữ liệu bài thi</h5>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

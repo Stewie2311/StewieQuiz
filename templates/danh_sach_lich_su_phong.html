@@ -1,0 +1,187 @@
+{#
+  danh_sach_lich_su_phong.html — DANH SÁCH CÁC PHÒNG ĐÃ ĐÓNG.
+  Admin thấy tất cả, giáo viên chỉ thấy phòng của mình.
+#}
+{% extends "base.html" %}
+
+{% block title %}Phòng đã thi xong - Khoa TT-TT{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 100px; padding-bottom: 60px;">
+    <!-- Thanh tiêu đề -->
+    <div class="d-flex align-items-center justify-content-between mb-4" style="gap: 16px; flex-wrap: wrap;">
+        <div>
+            <h2 class="fw-bold mb-1" style="color: #0f172a;">
+                <i class="fas fa-check-circle me-2" style="color: #16a34a;"></i>Phòng đã thi xong
+            </h2>
+            <p class="text-muted mb-0" style="font-size: 0.9rem;">
+                Danh sách các phòng thi đã kết thúc, xem kết quả và thống kê điểm số.
+            </p>
+        </div>
+        <a href="/?tab=room" class="btn btn-outline-secondary rounded-pill px-4" style="font-weight: 600;">
+            <i class="fas fa-arrow-left me-2"></i>Quay lại phòng thi
+        </a>
+    </div>
+
+    {% if phong_list %}
+    <div class="table-wrapper room-table-wrap" style="overflow-x:auto; background: #fff; border-radius: 18px; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);">
+        <table class="data-table room-table lib-table-modern" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th><i class="fas fa-door-open"></i> Tên phòng</th>
+                    <th><i class="fas fa-hashtag"></i> Mã phòng</th>
+                    <th><i class="fas fa-book"></i> Môn thi</th>
+                    <th><i class="fas fa-user-tie"></i> Giáo viên</th>
+                    <th class="text-center"><i class="fas fa-play-circle"></i> Bắt đầu thi</th>
+                    <th class="text-center"><i class="fas fa-users"></i> Thí sinh</th>
+                    <th class="text-center"><i class="fas fa-star"></i> Điểm TB</th>
+                    <th class="text-center"><i class="fas fa-gear"></i> Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in phong_list %}
+                <tr>
+                    <td class="col-primary">{{ p.ten_phong }}</td>
+                    <td style="white-space:nowrap;">
+                        {{ p.ma_phong }}
+                        {% if p.mat_khau %} <i class="fas fa-lock" title="Phòng có mật khẩu" style="color:#d97706;font-size:.72rem;"></i>{% endif %}
+                    </td>
+                    <td><span class="badge-count">{{ p.ten_mon }}</span></td>
+                    <td>{{ p.ten_gv }}</td>
+                    <td class="text-center">{{ p.thoi_gian_bat_dau.strftime('%H:%M %d/%m/%Y') if p.thoi_gian_bat_dau else 'Chưa đặt' }}</td>
+                    <td class="text-center">
+                        <span class="badge-count">{{ p.da_nop or 0 }}/{{ p.tong_thi_sinh or 0 }}</span>
+                    </td>
+                    <td class="text-center">
+                        {% if p.diem_tb %}
+                        {% set dtb = p.diem_tb|float %}
+                        <strong style="color: {% if dtb >= 8 %}#16a34a{% elif dtb >= 5 %}#d97706{% else %}#dc2626{% endif %};">
+                            {{ "%.1f"|format(dtb) }}
+                        </strong>
+                        {% else %}
+                        <span class="col-muted">--</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="tbl-actions center" style="display: flex; gap: 4px; justify-content: center;">
+                            <a href="/lich_su_phong/{{ p.id }}" class="btn-act btn-view icon-only" data-tip="Xem chi tiết" title="Xem chi tiết">
+                                <i class="fas fa-chart-simple"></i>
+                            </a>
+                            <a href="/phan_tich_phong/{{ p.id }}" class="btn-act btn-bank icon-only" data-tip="Phân tích đề" title="Phân tích đề">
+                                <i class="fas fa-chart-bar"></i>
+                            </a>
+                            <a href="/phan_tich_phong/{{ p.id }}/excel" class="btn-act btn-download icon-only" data-tip="Tải Excel" title="Tải Excel">
+                                <i class="fas fa-file-excel"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5" style="background: #fff; border-radius: 18px; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); padding: 80px 20px !important;">
+        <i class="fas fa-check-circle" style="font-size: 3.5rem; color: #d1d5db; display: block; margin-bottom: 16px;"></i>
+        <h4 style="color: #64748b; font-weight: 700;">Chưa có phòng thi nào đã kết thúc</h4>
+        <p style="color: #94a3b8; font-size: 0.95rem; max-width: 400px; margin: 10px auto 0;">
+            Khi một phòng thi được đóng, nó sẽ xuất hiện tại đây để bạn xem kết quả và thống kê.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Kế thừa style table của room-section */
+    .room-table-wrap {
+        padding: 4px;
+    }
+    .room-table th {
+        font-weight: 700;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #64748b;
+        background: #f8fafc;
+        padding: 14px 16px;
+        border-bottom: 2px solid #e2e8f0;
+        white-space: nowrap;
+    }
+    .room-table td {
+        padding: 14px 16px;
+        font-size: 0.9rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .room-table tbody tr:hover {
+        background: #f8fafc;
+    }
+    .col-primary {
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .badge-count {
+        display: inline-block;
+        padding: 3px 12px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        border-radius: 50px;
+        background: #eef2ff;
+        color: #4f46e5;
+    }
+    .col-muted {
+        color: #94a3b8;
+    }
+    .tbl-actions.center {
+        display: flex;
+        gap: 4px;
+        justify-content: center;
+    }
+    .btn-act {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: #f1f5f9;
+        color: #64748b;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+    .btn-act:hover {
+        transform: translateY(-1px);
+    }
+    .btn-act.btn-view:hover {
+        background: #eef2ff;
+        color: #4f46e5;
+    }
+    .btn-act.btn-bank:hover {
+        background: #fef3c7;
+        color: #d97706;
+    }
+    .btn-act.btn-download:hover {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+    .btn-act i {
+        font-size: 0.85rem;
+    }
+    /* Responsive */
+    @media (max-width: 768px) {
+        .room-table th, .room-table td {
+            padding: 10px 12px;
+            font-size: 0.8rem;
+        }
+        .btn-act {
+            width: 28px;
+            height: 28px;
+        }
+        .btn-act i {
+            font-size: 0.75rem;
+        }
+    }
+</style>
+{% endblock %}

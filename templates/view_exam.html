@@ -1,0 +1,172 @@
+{#
+  view_exam.html — XEM TOÀN BỘ CÂU HỎI của một bộ/đề trong thư viện (chỉ đọc).
+  Muốn sửa thì sang edit_exam.html.
+#}
+{% extends "base.html" %}
+
+{% block title %}Xem Đề Thi - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<style>
+    .exam-header {
+        background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(240,147,251,0.08));
+        border: 1px solid rgba(102,126,234,0.25);
+        border-radius: 20px; padding: 28px;
+        margin-bottom: 25px;
+        animation: fadeIn 0.5s ease;
+    }
+    .exam-title {
+        font-size: 1.6rem; font-weight: 800; color: #0f172a;
+        margin-bottom: 10px;
+    }
+    .exam-meta {
+        display: flex; gap: 15px; flex-wrap: wrap; color: var(--text-muted); font-size: 0.9rem;
+    }
+    .meta-badge {
+        background: #f1f5f9; padding: 5px 12px; border-radius: 8px;
+        border: 1px solid #e2e8f0; color: #334155;
+    }
+
+    /* KẾT THỪA STYLE TỪ TRANG RESULT (QUESTION CARD) */
+    .q-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px; margin-bottom: 14px;
+        overflow: hidden; transition: all 0.3s;
+    }
+    .q-card:hover {
+        border-color: rgba(102,126,234,0.3);
+        box-shadow: 0 5px 20px rgba(102,126,234,0.1);
+    }
+    .q-card-header {
+        padding: 14px 20px;
+        display: flex; justify-content: space-between;
+        align-items: center; flex-wrap: wrap; gap: 8px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .q-card-body { padding: 20px; }
+    .q-num {
+        font-size: 0.95rem; font-weight: 700;
+        color: #2563eb; text-transform: uppercase; letter-spacing: 1px;
+    }
+    .q-text {
+        font-size: 1rem; font-weight: 600; color: #0f172a; margin-bottom: 16px; line-height: 1.6;
+    }
+
+    /* BADGES */
+    .bloom-badge { padding: 3px 10px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; display: inline-block; }
+    .bloom-nho { background: rgba(168,85,247,0.15); color: #a855f7; border: 1px solid rgba(168,85,247,0.3); }
+    .bloom-hieu { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); }
+    .bloom-van-dung { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+    .bloom-phan-tich { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+    .bloom-danh-gia { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .bloom-sang-tao { background: rgba(236,72,153,0.15); color: #ec4899; border: 1px solid rgba(236,72,153,0.3); }
+    
+    /* ĐIỆN THOẠI: nhãn (Câu N · Chương · Độ khó · Bloom) thu nhỏ để xuống dòng
+       gọn gàng thay vì bị dồn chật một hàng, chữ bóp lại khó đọc. */
+    @media (max-width: 768px) {
+        .q-card-header { padding: 10px 14px; gap: 6px; }
+        .q-card-body { padding: 14px; }
+        .q-num { font-size: 0.85rem; }
+        .q-card-header .badge-chuong,
+        .q-card-header .badge-de,
+        .q-card-header .badge-tb,
+        .q-card-header .badge-kho,
+        .q-card-header .badge-bloom { font-size: 0.75rem !important; padding: 3px 8px !important; }
+    }
+    .badge-chuong { background: rgba(102,126,234,0.15); color: #2563eb; border: 1px solid rgba(102,126,234,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+    .badge-de  { background:rgba(56,239,125,0.15); color:#16a34a; border:1px solid rgba(56,239,125,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+    .badge-tb  { background:rgba(255,193,7,0.15); color:#d97706; border:1px solid rgba(255,193,7,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+    .badge-kho { background:rgba(255,107,107,0.15); color:#dc2626; border:1px solid rgba(255,107,107,0.3); padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; }
+
+    /* OPTIONS */
+    .opt-view {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+        padding: 10px 14px; border-radius: 10px; margin-bottom: 0; height: 100%;
+        background: #ffffff; border: 1px solid #e2e8f0;
+    }
+    .opt-view.correct {
+        background: rgba(56,239,125,0.08); border-color: rgba(56,239,125,0.3);
+    }
+    .opt-letter {
+        width: 28px; height: 28px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 0.8rem; flex-shrink: 0;
+        background: #e2e8f0; color: #64748b;
+    }
+    .opt-view.correct .opt-letter { background: rgba(56,239,125,0.2); color: #16a34a; }
+    .opt-text { font-size: 0.9rem; color: #475569; }
+    .opt-view.correct .opt-text { color: #16a34a; font-weight: 600; }
+    .correct-mark { margin-left: auto; color: #16a34a; font-size: 0.75rem; display: flex; align-items: center; gap: 4px; }
+    
+    .giai-thich-bloom {
+        margin-top: 12px; padding: 12px 14px;
+        background: rgba(102,126,234,0.06); border: 1px solid rgba(102,126,234,0.15);
+        border-radius: 10px; font-size: 0.82rem; color: #2563eb; line-height: 1.6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:900px; padding-bottom: 100px;">
+    
+    <div class="exam-header">
+        <div class="exam-title">
+            <i class="fas fa-file-alt me-2" style="color: #2563eb;"></i> {{ de_thi.ten_de_thi }}
+        </div>
+        <div class="exam-meta">
+            <span class="meta-badge"><i class="fas fa-book me-1"></i> Môn: {{ de_thi.ten_mon }}</span>
+            <span class="meta-badge"><i class="fas fa-list-ol me-1"></i> Số câu: {{ de_thi.tong_so_cau }}</span>
+            <span class="meta-badge"><i class="fas fa-calendar-alt me-1"></i> Ngày tạo: {% if de_thi.ngay_tao %}{{ de_thi.ngay_tao.strftime('%d/%m/%Y') }}{% endif %}</span>
+        </div>
+    </div>
+
+    {% for q in cau_hois %}
+    <div class="q-card">
+        <div class="q-card-header">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="q-num"><i class="fas fa-circle-dot me-1"></i> Câu {{ loop.index }}</span>
+                <span class="badge-chuong">Chương {{ q.chuong }}</span>
+
+                {% if q.do_kho == 'Dễ' %} <span class="badge-de">Dễ</span>
+                {% elif q.do_kho == 'Trung bình' %} <span class="badge-tb">Trung bình</span>
+                {% else %} <span class="badge-kho">Khó</span> {% endif %}
+
+                {% if q.bloom %}
+                    {% set bloom_val = q.bloom | lower %}
+                    {% if 'nhớ' in bloom_val or 'nho' in bloom_val %} <span class="bloom-badge bloom-nho">🧠 Nhớ</span>
+                    {% elif 'hiểu' in bloom_val or 'hieu' in bloom_val %} <span class="bloom-badge bloom-hieu">💡 Hiểu</span>
+                    {% elif 'vận dụng' in bloom_val or 'van dung' in bloom_val %} <span class="bloom-badge bloom-van-dung">⚙️ Vận dụng</span>
+                    {% elif 'phân tích' in bloom_val or 'phan tich' in bloom_val %} <span class="bloom-badge bloom-phan-tich">🔍 Phân tích</span>
+                    {% elif 'đánh giá' in bloom_val or 'danh gia' in bloom_val %} <span class="bloom-badge bloom-danh-gia">⚖️ Đánh giá</span>
+                    {% elif 'sáng tạo' in bloom_val or 'sang tao' in bloom_val %} <span class="bloom-badge bloom-sang-tao">✨ Sáng tạo</span>
+                    {% else %} <span class="bloom-badge bloom-nho">{{ q.bloom }}</span> {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="q-card-body">
+            <div class="q-text">{{ q.noi_dung }}</div>
+            {% set _ml = [q.cau_a|default('')|length, q.cau_b|default('')|length, q.cau_c|default('')|length, q.cau_d|default('')|length]|max %}
+            {% if _ml <= 30 %}{% set _col = 'col-6 col-md-3' %}{% elif _ml <= 80 %}{% set _col = 'col-12 col-sm-6' %}{% else %}{% set _col = 'col-12' %}{% endif %}
+            <div class="row g-2">
+                {% for opt, val in [('A',q.cau_a),('B',q.cau_b),('C',q.cau_c),('D',q.cau_d)] %}
+                <div class="{{ _col }}">
+                    <div class="opt-view {% if (q.dap_an_dung or '')|trim|upper == opt %}correct{% endif %}">
+                        <div class="opt-letter">{{ opt }}</div>
+                        <div class="opt-text" style="flex:1 1 0; min-width:0;">{{ val }}</div>
+                        {% if (q.dap_an_dung or '')|trim|upper == opt %}
+                        <div class="correct-mark"><i class="fas fa-check-circle"></i></div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% if q.giai_thich %}
+            <div class="giai-thich-bloom"><i class="fas fa-lightbulb me-1"></i><strong>Giải thích:</strong> {{ q.giai_thich }}</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

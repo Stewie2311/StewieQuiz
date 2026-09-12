@@ -1,0 +1,27 @@
+Flask==3.0.0
+Werkzeug==3.0.0
+mysql-connector-python==8.2.0
+python-dotenv==1.0.0
+requests==2.31.0
+pdfplumber==0.10.3
+Flask-WTF==1.2.1
+Flask-Limiter==3.5.0
+waitress==3.0.0
+
+# --- Bổ sung: các gói code ĐANG import nhưng trước đây thiếu trong file này ---
+Flask-SocketIO==5.3.6      # realtime giám sát webcam (routes/realtime.py)
+simple-websocket==1.0.0    # để Socket.IO dùng WebSocket thay vì chỉ long-polling
+Authlib==1.3.0             # đăng nhập Google OAuth (routes/auth.py)
+openpyxl==3.1.5            # xuất/nhập Excel (routes/excel_utils.py, routes/lop.py)
+
+gunicorn
+simple-websocket
+Flask-SocketIO
+# --- Chạy production trên Linux (VPS). Trên Windows dùng waitress ở trên. ---
+gunicorn==21.2.0
+
+# --- TÙY CHỌN: phát hiện câu hỏi trùng lặp bằng AI (routes/ngan_hang.py) ---
+# Gói này kéo theo PyTorch (~2-3GB) và tải model từ HuggingFace ở lần dùng đầu.
+# VPS dưới 4GB RAM: ĐỪNG cài — hệ thống tự chuyển sang so khớp chuỗi (difflib),
+# mọi chức năng khác vẫn chạy bình thường.
+# sentence-transformers==2.7.0

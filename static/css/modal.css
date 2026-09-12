@@ -1,0 +1,64 @@
+/* =====================================================================
+   modal.css — Hộp thoại bật lên (chọn câu hỏi, xác nhận xóa...).
+   ===================================================================== */
+
+.modal-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+}
+
+.modal-header {
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 24px;
+}
+
+.modal-title {
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.modal-body {
+    padding: 24px;
+    color: var(--text-secondary);
+}
+
+.modal-footer {
+    background: var(--surface-2);
+    border-top: 1px solid var(--border);
+    padding: 16px 24px;
+}
+
+.btn-close { opacity: 0.6; }
+.btn-close:hover { opacity: 1; }
+
+/* MODAL ANIMATIONS */
+.modal.fade .modal-dialog {
+    transform: translateY(14px) scale(0.98);
+    transition: transform 0.3s var(--ease), opacity 0.3s ease;
+}
+.modal.show .modal-dialog {
+    transform: none;
+}
+
+.modal-fullscreen { z-index: 1050; }
+
+.modal-fullscreen .modal-dialog {
+    max-width: 100%;
+    margin: 0;
+    height: 100vh;
+}
+
+.modal-fullscreen .modal-content {
+    border-radius: 0;
+    height: 100%;
+}
+
+.modal-fullscreen .modal-body {
+    height: calc(100vh - 120px);
+    overflow-y: auto;
+}

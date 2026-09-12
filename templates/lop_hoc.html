@@ -1,0 +1,263 @@
+{#
+  lop_hoc.html — DANH SÁCH LỚP.
+
+  Mọi giáo viên đều XEM được tất cả lớp, nhưng chỉ CHỦ LỚP mới sửa/xóa được.
+  Cờ `is_owner` từ server quyết định các nút Sửa/Xóa có hiện hay không — nhưng
+  đó chỉ là chuyện giao diện, quyền thật vẫn được kiểm lại ở server (routes/lop.py).
+#}
+{% extends 'base.html' %}
+{% block title %}Lớp học - Khoa TT-TT{% endblock %}
+{% block extra_css %}
+<style>
+    /* === Split layout giống Thư viện/Phòng thi === */
+    .lop-split{display:flex;align-items:flex-start;gap:18px;margin-top:12px}
+    .lop-split .lop-table-fit{flex:1 1 auto;min-width:0}
+    .lop-table-fit{width:100%;table-layout:auto}
+    @media(max-width:900px){.lop-split{flex-direction:column}}
+    /* Panel stats */
+    .lop-stats{flex:0 0 250px;align-self:stretch;background:var(--surface);border:1px solid #e2e8f0;border-radius:10px!important;padding:18px;box-shadow:0 6px 20px rgba(15,23,42,.06)}
+    .lop-stats .lst-nums{display:flex;gap:10px;margin-bottom:18px}
+    .lop-stats .lst-num{flex:1;text-align:center;background:#eff6ff;border:1px solid rgba(37,99,235,.15);border-radius:12px;padding:12px 6px}
+    .lop-stats .lst-num b{display:block;font-size:1.5rem;font-weight:900;color:var(--primary);line-height:1}
+    .lop-stats .lst-num span{font-size:.72rem;color:#64748b;font-weight:600}
+    .lop-stats .lst-sub{font-size:.78rem;font-weight:700;color:#334155;margin-bottom:10px}
+    .lop-stats .lst-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .lop-stats .lst-bar-name{width:68px;flex-shrink:0;font-size:.76rem;font-weight:800}
+    .lop-stats .lst-track{flex:1;height:10px;background:#eef2f7;border-radius:999px;overflow:hidden}
+    .lop-stats .lst-fill{display:block;height:100%;width:var(--w,0);border-radius:999px}
+    .lop-stats .lst-bar-val{width:26px;flex-shrink:0;text-align:right;font-size:.78rem;font-weight:800;color:#475569}
+    /* Donut */
+    .lst-donut-wrap{display:flex;justify-content:center;margin:4px 0 16px}
+    .lst-donut{width:150px;height:150px;overflow:visible}
+    .lst-donut circle{fill:none;stroke-width:13}
+    .lst-donut-track{stroke:#eef2f7}
+    .lst-seg{stroke-linecap:butt;transform-box:fill-box;transform-origin:center;stroke-dashoffset:0;filter:drop-shadow(0 2px 3px rgba(15,23,42,.12))}
+    .lst-donut-num{text-anchor:middle;dominant-baseline:middle;font-size:21px;font-weight:900;fill:#0f172a}
+    .lst-donut-cap{text-anchor:middle;dominant-baseline:middle;font-size:8px;font-weight:600;fill:#94a3b8}
+    /* Bảng */
+    .lop-table.table-wrapper{border-radius:10px!important;overflow:hidden;box-shadow:0 6px 20px rgba(15,23,42,.06)}
+    .lop-table .data-table{border-radius:10px!important}
+    .lop-table .data-table th,.lop-table .data-table td{font-size:.8rem!important}
+    .lop-table .data-table tbody td{padding:5px 7px!important;color:#3b3e44!important}
+    .lop-table .data-table thead th{padding:5px 7px!important;background:#f1f5f9!important;color:#555b65!important;font-weight:600!important}
+    /* Viền để .lib-table-modern lo (nhạt #eef2f7, dòng cuối không viền) — giống hệt bảng Thư viện */
+    .lop-table .data-table tbody tr{transition:background .15s ease}.lop-table .data-table tbody tr:hover{background:#f8fafc}
+    .lop-table thead th i{margin-right:4px;opacity:.6}
+    .lop-table .col-primary{font-weight:600;color:#3b3e44;font-size:.8rem}
+    .lop-table .badge-count{display:inline-block!important;min-width:0!important;padding:2px 10px!important;border:none!important;background:#eff6ff!important;color:#1d4ed8!important;border-radius:999px!important;font-weight:600!important;font-size:.8rem!important}
+    .lop-table .btn-act.icon-only{width:30px;height:30px;padding:0;justify-content:center;font-size:.8rem}
+    .lop-table .btn-act.icon-only:hover{transform:translateY(-1px);filter:brightness(.92)}
+    .lop-table .btn-act.btn-view{color:#2563eb!important;background:#eff6ff!important;border-color:rgba(37,99,235,.25)!important}
+    .lop-table .btn-act.btn-view:hover{color:#fff!important;background:#2563eb!important;border-color:#2563eb!important}
+    .lop-table .btn-act.btn-excel{color:#16a34a!important;background:#ecfdf5!important;border-color:rgba(22,163,74,.25)!important}
+    .lop-table .btn-act.btn-excel:hover{color:#fff!important;background:#16a34a!important;border-color:#16a34a!important}
+    .lop-table .btn-act.btn-edit{color:#d97706!important;background:#fffbeb!important;border-color:rgba(217,119,6,.25)!important}
+    .lop-table .btn-act.btn-edit:hover{color:#fff!important;background:#d97706!important;border-color:#d97706!important}
+    .lop-table .btn-act.btn-del{color:#dc2626!important;background:#fef2f2!important;border-color:rgba(220,38,38,.25)!important}
+    .lop-table .btn-act.btn-del:hover{color:#fff!important;background:#dc2626!important;border-color:#dc2626!important}
+    .lop-table tbody .tbl-actions{opacity:0!important;gap:4px;transition:opacity .18s ease}
+    .lop-table tbody tr:hover .tbl-actions,.lop-table tbody tr:focus-within .tbl-actions{opacity:1!important}
+    @media(hover:none),(max-width:768px){.lop-table tbody .tbl-actions{opacity:1!important}}
+    /* Pills (giống room-section) */
+    .lop-custom-pills.nav-pills{gap:10px}
+    .lop-custom-pills .nav-link{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border:1px solid var(--border)!important;background:var(--surface);font-weight:600;font-size:.9rem;color:var(--text-muted);cursor:pointer;border-radius:10px!important;transition:all .3s var(--ease);text-decoration:none}
+    .lop-custom-pills .nav-link:hover{color:var(--primary-dark);background:var(--primary-softer)}
+    .lop-custom-pills .nav-link.active{background:var(--primary-soft)!important;color:var(--primary-dark)!important;border-color:rgba(37,99,235,.3)!important}
+    /* Header: title + pills + toolbar trên CÙNG 1 hàng, giữ border-bottom làm đường line trắng */
+    .lop-header-bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:5px;margin-bottom:8px}
+    .lop-header-bar .lop-header-title{display:flex;align-items:center;gap:8px;font-weight:800;font-size:1rem;color:#0f172a;white-space:nowrap}
+    .lop-header-bar .lop-header-title i{color:var(--primary)}
+    .lop-toolbar{margin-left:auto;flex-shrink:0;display:flex;align-items:center;border:1px solid var(--border);border-radius:12px;background:#f8fafc;padding:6px 10px;min-height:54px;gap:10px}
+    .lop-btn-new{background:var(--grad-primary);color:#fff;font-weight:700;width:42px;height:42px;padding:0;border-radius:10px;border:none;box-shadow:var(--shadow-primary);transition:all .2s var(--ease);display:inline-flex;align-items:center;justify-content:center;font-size:1rem;cursor:pointer;text-decoration:none}
+    .lop-btn-new:hover{transform:translateY(-2px);color:#fff;box-shadow:var(--shadow-lg)}
+    .lop-toolbar .nh-search{position:static;display:inline-flex;align-items:center}
+    .lop-toolbar .nh-search-input{position:static;width:0;min-width:0;height:38px;padding:0;border:1px solid transparent;border-radius:10px;background:#fff;color:#0f172a;opacity:0;pointer-events:none;overflow:hidden;white-space:nowrap;transition:width .28s cubic-bezier(0.4,0,.2,1),opacity .22s ease,padding .22s ease,border-color .22s ease}
+    .lop-toolbar .nh-search-chk:checked~.nh-search-input{width:200px;opacity:1;pointer-events:auto;padding:0 12px;border-color:var(--border-strong)}
+    .lop-toolbar .nh-search-icon{position:static;z-index:auto;width:38px;height:38px;flex:0 0 auto}
+    /* Điện thoại: ô tìm kiếm nền trắng THU GỌN — ôm sát nội dung, dồn phải, thấp lại */
+    @media(max-width:768px){
+        .lop-toolbar{margin-left:auto;width:auto;padding:4px 6px;min-height:0;gap:6px}
+        .lop-btn-new{width:34px;height:34px;font-size:.9rem}
+    }
+    /* Modal */
+    .lop-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:2000;display:none;align-items:flex-start;justify-content:center;padding:50px 14px}
+    .lop-modal-overlay.show{display:flex}
+    .lop-modal{background:#fff;border-radius:16px;max-width:440px;width:100%;padding:22px;box-shadow:0 30px 60px rgba(15,23,42,.3)}
+    /* Pane ẩn/hiện */
+    .lop-pane{display:none}.lop-pane.active{display:block;margin-top:12px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lop-page-wrap" style="max-width:var(--content-narrow);margin:0 auto;">
+
+    <!-- ── Header: title + pills + toolbar (cùng hàng, line trắng dưới) ── -->
+    <div class="lop-header-bar">
+        <!-- Pills nằm giữa title và toolbar -->
+        <ul class="nav nav-pills lop-custom-pills mb-0" id="lopPills" style="gap:10px;flex-shrink:0;border-bottom:none;padding-bottom:0;margin-bottom:0">
+            <li><button class="nav-link active" id="lop-all-tab" onclick="showLopTab('lop-all-pane')"><i class="fas fa-globe me-2"></i>Tất cả các lớp học</button></li>
+            <li><button class="nav-link" id="lop-my-tab" onclick="showLopTab('lop-my-pane')"><i class="fas fa-user-tie me-2"></i>Lớp học của tôi</button></li>
+        </ul>
+        <div class="lop-toolbar" id="lopToolbar">
+            <div class="nh-search">
+                <input type="checkbox" id="lopSearchChk" class="nh-search-chk">
+                <label for="lopSearchChk" class="nh-search-icon" title="Tìm tên lớp"><i class="fas fa-search"></i></label>
+                <input type="text" id="lopSearch" class="nh-search-input" placeholder="Nhập tên lớp..." onkeyup="filterLop()">
+            </div>
+            <button type="button" class="lop-btn-new" id="lopBtnNew" title="Tạo lớp mới" onclick="moTaoLop()" style="display:none"><i class="fas fa-plus"></i></button>
+        </div>
+    </div>
+
+    <!-- ── PANE 1: TẤT CẢ LỚP ── -->
+    <div class="lop-pane active" id="lop-all-pane">
+        {% set n_nho=lops|selectattr('si_so','lt',20)|list|length %}
+        {% set n_vua=lops|selectattr('si_so','ge',20)|selectattr('si_so','le',50)|list|length %}
+        {% set n_lon=lops|selectattr('si_so','gt',50)|list|length %}
+        {% set n_total=n_nho+n_vua+n_lon %}
+        {% set C=264 %}{% set dk_max=[n_nho,n_vua,n_lon,1]|max %}
+        <div class="lop-split">
+            <aside class="lop-stats">
+                <div class="lst-nums"><div class="lst-num"><b>{{ lops|length }}</b><span>Lớp học</span></div><div class="lst-num"><b>{{ all_tong_si_so }}</b><span>Tổng SV</span></div></div>
+                <div class="lst-donut-wrap">
+                    <svg class="lst-donut" viewBox="0 0 100 100">
+                        <circle class="lst-donut-track" cx="50" cy="50" r="42"></circle>
+                        {% if n_total %}
+                        <circle class="lst-seg seg-de" cx="50" cy="50" r="42" style="stroke:#22c55e;stroke-dasharray:{{(n_nho*C/n_total)|round(2)}} 999;transform:rotate(-90deg)"></circle>
+                        <circle class="lst-seg seg-tb" cx="50" cy="50" r="42" style="stroke:#f59e0b;stroke-dasharray:{{(n_vua*C/n_total)|round(2)}} 999;transform:rotate({{(-90+n_nho*360/n_total)|round(2) if n_total else -90}}deg)"></circle>
+                        <circle class="lst-seg seg-kho" cx="50" cy="50" r="42" style="stroke:#ef4444;stroke-dasharray:{{(n_lon*C/n_total)|round(2)}} 999;transform:rotate({{(-90+(n_nho+n_vua)*360/n_total)|round(2) if n_total else -90}}deg)"></circle>
+                        {% endif %}
+                        <text class="lst-donut-num" x="50" y="49">{{ n_total }}</text><text class="lst-donut-cap" x="50" y="63">lớp</text>
+                    </svg>
+                </div>
+                <div class="lst-sub">Phân bố quy mô</div>
+                <div class="lst-bars">
+                    <div class="lst-bar"><span class="lst-bar-name" style="color:#16a34a;"><20 SV</span><span class="lst-track"><span class="lst-fill dk-de" style="--w:{{(n_nho*100/dk_max)|int}}%"></span></span><span class="lst-bar-val">{{ n_nho }}</span></div>
+                    <div class="lst-bar"><span class="lst-bar-name" style="color:#d97706;">20-50 SV</span><span class="lst-track"><span class="lst-fill dk-tb" style="--w:{{(n_vua*100/dk_max)|int}}%"></span></span><span class="lst-bar-val">{{ n_vua }}</span></div>
+                    <div class="lst-bar"><span class="lst-bar-name" style="color:#dc2626;">>50 SV</span><span class="lst-track"><span class="lst-fill dk-kho" style="--w:{{(n_lon*100/dk_max)|int}}%"></span></span><span class="lst-bar-val">{{ n_lon }}</span></div>
+                </div>
+            </aside>
+            <div class="table-wrapper lop-table lop-table-fit" style="overflow-x:auto;">
+                <table class="data-table lib-table-modern lib-table-fit">
+                    <thead><tr><th><i class="fas fa-users-rectangle"></i> Tên lớp</th><th style="width:25%"><i class="fas fa-user"></i> Người tạo</th><th class="text-center" style="width:15%"><i class="fas fa-user-graduate"></i> Sĩ số</th><th class="text-center" style="width:1%"><i class="fas fa-gear"></i> Thao tác</th></tr></thead>
+                    <tbody id="lopTableBodyAll">
+                        {% for l in lops %}{% set owner=(session.get('role')=='admin' or l.user_id==session.get('user_id')) %}
+                        <tr data-ten="{{ l.ten_lop|lower }}">
+                            <td class="col-primary">{{ l.ten_lop }}</td>
+                            <td><span style="color:#3b3e44;font-size:.8rem;">{{ l.nguoi_tao or '—' }}</span>{% if owner %}<span style="color:var(--primary);font-size:.72rem;"> (bạn)</span>{% endif %}</td>
+                            <td class="text-center"><span class="badge-count">{{ l.si_so }}</span></td>
+                            <td><div class="tbl-actions center">
+                                <a href="{{ url_for('lop.chi_tiet_lop',lop_id=l.id) }}" class="btn-act btn-view icon-only" data-tip="Xem" title="Xem"><i class="fas fa-users"></i></a>
+                                <a href="{{ url_for('lop.xuat_excel',lop_id=l.id) }}" class="btn-act btn-excel icon-only" data-tip="Excel" title="Excel"><i class="fas fa-file-excel"></i></a>
+                                {% if owner %}<button onclick="moSuaLop({{ l.id }},'{{ l.ten_lop }}')" class="btn-act btn-edit icon-only" data-tip="Sửa" title="Sửa"><i class="fas fa-edit"></i></button>
+                                <form method="POST" action="{{ url_for('lop.xoa_lop',lop_id=l.id) }}" onsubmit="return confirm('Xóa lớp?');" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-act btn-del icon-only" data-tip="Xóa" title="Xóa"><i class="fas fa-trash"></i></button></form>{% endif %}
+                            </div></td>
+                        </tr>{% endfor %}
+                        {% if not lops %}<tr><td colspan="4" style="text-align:center;padding:60px 20px;color:var(--text-muted)"><i class="fas fa-users-line" style="font-size:2.6rem;opacity:.5;display:block;margin-bottom:12px"></i><h5 style="color:var(--text-secondary)">Chưa có lớp nào</h5><p style="font-size:.9rem">Bấm <b>+</b> để tạo lớp đầu tiên.</p></td></tr>{% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── PANE 2: LỚP CỦA TÔI ── -->
+    <div class="lop-pane" id="lop-my-pane">
+        {% set mn_nho=my_lops|selectattr('si_so','lt',20)|list|length %}
+        {% set mn_vua=my_lops|selectattr('si_so','ge',20)|selectattr('si_so','le',50)|list|length %}
+        {% set mn_lon=my_lops|selectattr('si_so','gt',50)|list|length %}
+        {% set mn_total=mn_nho+mn_vua+mn_lon %}
+        {% set md_max=[mn_nho,mn_vua,mn_lon,1]|max %}
+        <div class="lop-split">
+            <aside class="lop-stats">
+                <div class="lst-nums"><div class="lst-num"><b>{{ my_lops|length }}</b><span>Lớp của tôi</span></div><div class="lst-num"><b>{{ my_tong_si_so }}</b><span>Tổng SV</span></div></div>
+                <div class="lst-donut-wrap">
+                    <svg class="lst-donut" viewBox="0 0 100 100">
+                        <circle class="lst-donut-track" cx="50" cy="50" r="42"></circle>
+                        {% if mn_total %}
+                        <circle class="lst-seg seg-de" cx="50" cy="50" r="42" style="stroke:#22c55e;stroke-dasharray:{{(mn_nho*C/mn_total)|round(2)}} 999;transform:rotate(-90deg)"></circle>
+                        <circle class="lst-seg seg-tb" cx="50" cy="50" r="42" style="stroke:#f59e0b;stroke-dasharray:{{(mn_vua*C/mn_total)|round(2)}} 999;transform:rotate({{(-90+mn_nho*360/mn_total)|round(2) if mn_total else -90}}deg)"></circle>
+                        <circle class="lst-seg seg-kho" cx="50" cy="50" r="42" style="stroke:#ef4444;stroke-dasharray:{{(mn_lon*C/mn_total)|round(2)}} 999;transform:rotate({{(-90+(mn_nho+mn_vua)*360/mn_total)|round(2) if mn_total else -90}}deg)"></circle>
+                        {% endif %}
+                        <text class="lst-donut-num" x="50" y="49">{{ mn_total }}</text><text class="lst-donut-cap" x="50" y="63">lớp</text>
+                    </svg>
+                </div>
+                <div class="lst-sub">Phân bố quy mô</div>
+                <div class="lst-bars">
+                    <div class="lst-bar"><span class="lst-bar-name" style="color:#16a34a;"><20 SV</span><span class="lst-track"><span class="lst-fill dk-de" style="--w:{{(mn_nho*100/md_max)|int}}%"></span></span><span class="lst-bar-val">{{ mn_nho }}</span></div>
+                    <div class="lst-bar"><span class="lst-bar-name" style="color:#d97706;">20-50 SV</span><span class="lst-track"><span class="lst-fill dk-tb" style="--w:{{(mn_vua*100/md_max)|int}}%"></span></span><span class="lst-bar-val">{{ mn_vua }}</span></div>
+                    <div class="lst-bar"><span class="lst-bar-name" style="color:#dc2626;">>50 SV</span><span class="lst-track"><span class="lst-fill dk-kho" style="--w:{{(mn_lon*100/md_max)|int}}%"></span></span><span class="lst-bar-val">{{ mn_lon }}</span></div>
+                </div>
+            </aside>
+            <div class="table-wrapper lop-table lop-table-fit" style="overflow-x:auto;">
+                <table class="data-table lib-table-modern lib-table-fit">
+                    <thead><tr><th><i class="fas fa-users-rectangle"></i> Tên lớp</th><th style="width:25%"><i class="fas fa-user"></i> Người tạo</th><th class="text-center" style="width:15%"><i class="fas fa-user-graduate"></i> Sĩ số</th><th class="text-center" style="width:1%"><i class="fas fa-gear"></i> Thao tác</th></tr></thead>
+                    <tbody id="lopTableBodyMy">
+                        {% for l in my_lops %}{% set owner=true %}
+                        <tr data-ten="{{ l.ten_lop|lower }}">
+                            <td class="col-primary">{{ l.ten_lop }}</td>
+                            <td><span style="color:#3b3e44;font-size:.8rem;">{{ l.nguoi_tao or '—' }}</span><span style="color:var(--primary);font-size:.72rem;"> (bạn)</span></td>
+                            <td class="text-center"><span class="badge-count">{{ l.si_so }}</span></td>
+                            <td><div class="tbl-actions center">
+                                <a href="{{ url_for('lop.chi_tiet_lop',lop_id=l.id) }}" class="btn-act btn-view icon-only" data-tip="Xem" title="Xem"><i class="fas fa-users"></i></a>
+                                <a href="{{ url_for('lop.xuat_excel',lop_id=l.id) }}" class="btn-act btn-excel icon-only" data-tip="Excel" title="Excel"><i class="fas fa-file-excel"></i></a>
+                                <button onclick="moSuaLop({{ l.id }},'{{ l.ten_lop }}')" class="btn-act btn-edit icon-only" data-tip="Sửa" title="Sửa"><i class="fas fa-edit"></i></button>
+                                <form method="POST" action="{{ url_for('lop.xoa_lop',lop_id=l.id) }}" onsubmit="return confirm('Xóa lớp?');" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-act btn-del icon-only" data-tip="Xóa" title="Xóa"><i class="fas fa-trash"></i></button></form>
+                            </div></td>
+                        </tr>{% endfor %}
+                        {% if not my_lops %}<tr><td colspan="4" style="text-align:center;padding:60px 20px;color:var(--text-muted)"><i class="fas fa-users-line" style="font-size:2.6rem;opacity:.5;display:block;margin-bottom:12px"></i><h5 style="color:var(--text-secondary)">Chưa có lớp nào</h5><p style="font-size:.9rem">Bấm <b>+</b> để tạo lớp đầu tiên.</p></td></tr>{% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- MODAL tạo/đổi tên lớp -->
+<div class="lop-modal-overlay" id="lopModal">
+    <div class="lop-modal">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <h3 id="lopModalTitle" style="margin:0;font-size:1.1rem;color:var(--text-primary)">Tạo lớp mới</h3>
+            <button onclick="dongLopModal()" style="background:none;border:none;font-size:1.6rem;line-height:1;color:#94a3b8;cursor:pointer">&times;</button>
+        </div>
+        <form id="lopForm" method="POST" action="{{ url_for('lop.tao_lop') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="form-label-dark">Tên lớp <span style="color:var(--danger)">*</span></label>
+            <input type="text" name="ten_lop" id="lopTenInput" class="form-control-dark" placeholder="VD: CNTT01 - K20" required>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+                <button type="button" class="btn-ghost-sm" onclick="dongLopModal()">Hủy</button>
+                <button type="submit" class="btn-primary-sm"><i class="fas fa-save"></i> Lưu</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const LOP_TAO_URL="{{ url_for('lop.tao_lop') }}";
+function moTaoLop(){document.getElementById('lopModalTitle').textContent='Tạo lớp mới';document.getElementById('lopForm').action=LOP_TAO_URL;document.getElementById('lopTenInput').value='';document.getElementById('lopModal').classList.add('show');setTimeout(function(){document.getElementById('lopTenInput').focus()},50)}
+function moSuaLop(id,ten){document.getElementById('lopModalTitle').textContent='Đổi tên lớp';document.getElementById('lopForm').action='/lop/'+id+'/sua';document.getElementById('lopTenInput').value=ten||'';document.getElementById('lopModal').classList.add('show');setTimeout(function(){var i=document.getElementById('lopTenInput');i.focus();i.select()},50)}
+function dongLopModal(){document.getElementById('lopModal').classList.remove('show')}
+document.getElementById('lopModal').addEventListener('click',function(e){if(e.target===this)dongLopModal()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')dongLopModal()});
+
+// Chuyển tab Lớp học
+function showLopTab(paneId){
+    document.querySelectorAll('#lopPills .nav-link').forEach(function(b){b.classList.toggle('active',b.id===(paneId==='lop-all-pane'?'lop-all-tab':'lop-my-tab'))});
+    document.querySelectorAll('.lop-pane').forEach(function(p){p.classList.toggle('active',p.id===paneId)});
+    // Nút "Tạo lớp mới" CHỈ hiện ở tab "Lớp học của tôi"; tab "Tất cả" chỉ có tìm kiếm
+    var btn=document.getElementById('lopBtnNew');
+    if(btn)btn.style.display=(paneId==='lop-my-pane')?'':'none';
+}
+// Vào từ dropdown "Lớp học" ở trang khác (/lop?pill=my) -> mở sẵn đúng tab nhỏ
+(function(){
+    var pill = new URLSearchParams(window.location.search).get('pill');
+    if (pill === 'my') showLopTab('lop-my-pane');
+})();
+// Lọc client-side (cả 2 bảng)
+function filterLop(){
+    var kw=(document.getElementById('lopSearch').value||'').toLowerCase().trim();
+    document.querySelectorAll('#lopTableBodyAll tr[data-ten],#lopTableBodyMy tr[data-ten]').forEach(function(tr){tr.style.display=(tr.getAttribute('data-ten')||'').indexOf(kw)>-1?'':'none'});
+}
+</script>
+{% endblock %}

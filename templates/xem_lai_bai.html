@@ -1,0 +1,119 @@
+{#
+  xem_lai_bai.html — HỌC SINH XEM LẠI BÀI THI CŨ.
+
+  Chỉ mở được khi phòng thi ĐÃ KẾT THÚC. Cho xem sớm thì người thi ca đầu chụp
+  màn hình đáp án gửi cho ca sau.
+
+  Đề hiện ra ở đây được DỰNG LẠI đúng thứ tự đã trộn hồi thí sinh làm bài, nên
+  "đáp án bạn chọn: C" trỏ đúng vào phương án mà họ đã bấm ngày hôm đó.
+#}
+{% extends 'base.html' %}
+
+{% block title %}Xem lại bài thi - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<style>
+    .xl-wrap { max-width: 820px; margin: 0 auto; }
+    .xl-head {
+        background: linear-gradient(135deg, var(--primary-softer), #fff);
+        border: 1px solid var(--border); border-radius: var(--radius-lg);
+        padding: 26px; margin-bottom: 22px; box-shadow: var(--shadow-sm);
+    }
+    .xl-score { font-size: 2.6rem; font-weight: 900; line-height: 1; }
+    .xl-meta { color: var(--text-muted); font-size: 0.9rem; }
+    .xl-stat { display:flex; gap:12px; margin-top:16px; flex-wrap:wrap; }
+    .xl-stat .box {
+        flex:1; min-width:120px; background:var(--surface-2); border:1px solid var(--border);
+        border-radius:12px; padding:12px 14px; text-align:center;
+    }
+    .xl-stat .v { font-size:1.4rem; font-weight:800; }
+    .xl-stat .l { font-size:0.74rem; color:var(--text-muted); }
+
+    .q-review {
+        background:#fff; border:1px solid var(--border);
+        border-left:4px solid var(--text-muted); border-radius:12px;
+        padding:18px; margin-bottom:12px;
+    }
+    .q-review.correct { border-left-color:#16a34a; }
+    .q-review.wrong   { border-left-color:#dc2626; }
+    .q-review .q-text { font-weight:600; margin-bottom:14px; line-height:1.5; color:var(--text-primary); }
+    .opt-line {
+        display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:8px 12px;
+        border-radius:8px; margin-bottom:0; font-size:0.9rem; height:100%;
+        background:var(--surface-2); border:1px solid var(--border); color:var(--text-secondary);
+    }
+    .opt-line.dap-dung { background:rgba(56,239,125,0.10); border-color:rgba(22,163,74,0.35); color:#16a34a; }
+    .opt-line.chon-sai { background:rgba(220,38,38,0.08); border-color:rgba(220,38,38,0.3); color:#dc2626; }
+    .opt-letter-sm {
+        width:26px; height:26px; border-radius:7px; flex-shrink:0;
+        display:flex; align-items:center; justify-content:center; font-weight:700;
+        font-size:0.8rem; background:#e2e8f0;
+    }
+    .tag { font-size:0.72rem; padding:2px 8px; border-radius:6px; font-weight:700; margin-left:auto; white-space:nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="xl-wrap">
+    <div class="xl-head">
+        <div class="xl-meta mb-1"><i class="fas fa-door-open me-1"></i>{{ thi_sinh.ten_phong }}</div>
+        <div class="d-flex align-items-end gap-3 flex-wrap">
+            {% set diem = thi_sinh.diem if thi_sinh.diem is not none else 0 %}
+            <div class="xl-score text-gradient">{{ '%.2f'|format(diem) }}<span style="font-size:1rem;color:var(--text-muted);font-weight:600;"> / {{ '%g'|format(thi_sinh.tong_diem|float) if thi_sinh.tong_diem else 10 }}</span></div>
+        </div>
+        <div class="xl-meta mt-2">
+            <i class="fas fa-book me-1"></i>{{ thi_sinh.ten_mon }} &middot; {{ thi_sinh.ten_de_thi }}
+            &middot; <i class="fas fa-user-tie me-1"></i>{{ thi_sinh.ten_gv }}
+        </div>
+
+        <div class="xl-stat">
+            <div class="box"><div class="v" style="color:#16a34a;">{{ thi_sinh.so_cau_dung or 0 }}</div><div class="l">Câu đúng</div></div>
+            <div class="box"><div class="v" style="color:#dc2626;">{{ (thi_sinh.tong_so_cau or 0) - (thi_sinh.so_cau_dung or 0) }}</div><div class="l">Câu sai</div></div>
+            <div class="box"><div class="v" style="color:#2563eb;">{{ thi_sinh.tong_so_cau or 0 }}</div><div class="l">Tổng câu</div></div>
+        </div>
+    </div>
+
+    <h5 class="fw-bold mb-3"><i class="fas fa-list-check me-2" style="color:#2563eb;"></i>Chi tiết các câu đã chọn</h5>
+
+    {% if not hien_dap_an %}
+    <div class="alert alert-info" style="font-size:0.9rem;">
+        <i class="fas fa-circle-info me-1"></i>
+        Giáo viên không công khai đáp án đúng cho phòng thi này. Bạn vẫn xem được
+        đáp án mình đã chọn và câu đúng/sai.
+    </div>
+    {% endif %}
+
+    {% for c in chi_tiet %}
+    <div class="q-review {% if c.is_correct %}correct{% else %}wrong{% endif %}">
+        <div class="q-text">
+            Câu {{ loop.index }}: {{ c.noi_dung }}
+            {% if c.is_correct %}
+                <span class="tag" style="background:rgba(56,239,125,0.15);color:#16a34a;">✓ Đúng</span>
+            {% else %}
+                <span class="tag" style="background:rgba(220,38,38,0.12);color:#dc2626;">✗ Sai</span>
+            {% endif %}
+        </div>
+        {% set _ml = [c.cau_a|default('')|length, c.cau_b|default('')|length, c.cau_c|default('')|length, c.cau_d|default('')|length]|max %}
+        {% if _ml <= 30 %}{% set _col = 'col-6 col-md-3' %}{% elif _ml <= 80 %}{% set _col = 'col-12 col-sm-6' %}{% else %}{% set _col = 'col-12' %}{% endif %}
+        <div class="row g-2">
+        {% for opt, val in [('A', c.cau_a), ('B', c.cau_b), ('C', c.cau_c), ('D', c.cau_d)] %}
+        <div class="{{ _col }}">
+        <div class="opt-line{%- if hien_dap_an and opt == c.dap_an_dung %} dap-dung{%- elif opt == c.dap_an_chon and not c.is_correct %} chon-sai{% endif %}">
+            <div class="opt-letter-sm">{{ opt }}</div>
+            <div style="flex:1 1 0; min-width:0;">{{ val }}</div>
+            {% if hien_dap_an and opt == c.dap_an_dung %}
+                <span class="tag" style="color:#16a34a;">Đáp án đúng</span>
+            {% elif opt == c.dap_an_chon %}
+                <span class="tag" style="color:{% if c.is_correct %}#16a34a{% else %}#dc2626{% endif %};">Bạn chọn</span>
+            {% endif %}
+        </div>
+        </div>
+        {% endfor %}
+        </div>
+        {% if not c.dap_an_chon %}
+        <div class="xl-meta mt-1" style="font-size:0.8rem;"><i class="fas fa-minus-circle me-1"></i>Bạn không chọn đáp án cho câu này.</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

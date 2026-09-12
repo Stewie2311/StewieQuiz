@@ -1,0 +1,184 @@
+{#
+  student-room-section.html — TAB "PHÒNG THI" của học sinh (include vào index.html).
+  Liệt kê các phòng đang mở để vào thi. Phòng có ổ khóa là phòng cần mật khẩu.
+#}
+<style>
+    /* Ép cỡ chữ 0.8rem cho TOÀN BỘ form phòng thi — thắng typography-unify.css
+       (nạp cuối, dùng !important) nhờ độ đặc hiệu #id. Không nhắm <i> nên icon giữ nguyên. */
+    #student-room-tab :where(h1,h2,h3,h4,h5,h6,p,span,div,strong,small,label,a,button,input,td,th,.badge) {
+        font-size: 0.8rem !important;
+    }
+    /* Bo tròn các ô nền trắng — thắng square.css (* border-radius:0 !important) */
+    #student-room-tab .student-room-header,
+    #student-room-tab .room-card,
+    #student-room-tab #roomGrid > .col-12,
+    #passwordModal .modal-content {
+        border-radius: var(--radius-lg) !important;
+    }
+    #student-room-tab .room-card .btn,
+    #passwordModal .modal-footer .btn,
+    #passwordModal #modalPasswordInput {
+        border-radius: 10px !important;
+    }
+    /* Ô tìm kiếm ở HEADER phòng thi: icon giữ nguyên bên TRÁI, ô nhập mở IN-FLOW
+       sang PHẢI (position:static) để nền trắng của panel tự dãn vừa đủ theo. */
+    #student-room-tab .student-room-header .nh-search { gap: 6px; }
+    #student-room-tab .student-room-header .nh-search-input {
+        position: static; right: auto; top: auto;
+        width: 0; padding: 0;
+    }
+    #student-room-tab .student-room-header .nh-search-chk:checked ~ .nh-search-input {
+        width: 240px; max-width: 46vw; opacity: 1; pointer-events: auto;
+        padding: 0 14px; border-color: var(--border-strong);
+    }
+</style>
+<div class="tab-pane {% if active_tab == 'student-room' %}active{% endif %}" id="student-room-tab">
+    <div class="container py-4" style="max-width: var(--content-narrow); font-family: var(--font-sans);">
+
+        <div class="student-room-header"
+             style="background: var(--surface); border: 1px solid var(--border);
+                    border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+                    padding: 18px 22px; margin-bottom: var(--section-gap);
+                    font-family: var(--font-sans); font-size: 0.8rem;
+                    display: inline-flex; width: fit-content; max-width: 100%;
+                    align-items: center; flex-wrap: nowrap; gap: 18px;">
+            <div class="section-header" style="margin-bottom: 0;">
+                <h2 style="font-family: var(--font-sans);"><i class="fas fa-list-ul me-2" style="color: var(--primary);"></i>Phòng Thi Đang Mở</h2>
+                <p style="font-family: var(--font-sans); font-size: 0.8rem;">Nhấn vào phòng thi tương ứng và nhập mật khẩu để tham gia</p>
+            </div>
+
+            <div class="nh-search">
+                <input type="checkbox" id="roomSearchChk" class="nh-search-chk">
+                <label for="roomSearchChk" class="nh-search-icon" title="Tìm phòng thi"><i class="fas fa-search"></i></label>
+                <input type="text" id="searchInput" class="nh-search-input" placeholder="Tìm môn, giáo viên, phòng..." onkeyup="filterRooms()">
+            </div>
+        </div>
+
+        <div class="row g-3" id="roomGrid">
+            {% if phong_dang_mo %}
+                {% for p in phong_dang_mo %}
+                <div class="col-md-4 room-card-item">
+                    <span class="d-none search-data">{{ p.ten_phong }} {{ p.ten_mon }} {{ p.ten_gv }}</span>
+                    
+                    <div class="room-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; transition: all 0.3s; height: 100%; display: flex; flex-direction: column;">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <h5 class="fw-bold text-dark mb-0" style="line-height: 1.4;">{{ p.ten_phong }}</h5>
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success ms-2">Mở</span>
+                        </div>
+                        <div class="text-muted small mb-4 flex-grow-1">
+                            <div class="mb-2"><i class="fas fa-book me-2 text-warning"></i>Môn: <strong class="text-dark">{{ p.ten_mon }}</strong></div>
+                            <div class="mb-2"><i class="fas fa-user-tie me-2 text-info"></i>GV: <strong class="text-dark">{{ p.ten_gv }}</strong></div>
+                            <div class="mb-2"><i class="fas fa-play-circle me-2 text-success"></i>Thi lúc: <strong class="text-dark">{{ p.thoi_gian_bat_dau_str }}</strong></div>
+                            <div><i class="fas fa-hourglass-half me-2 text-danger"></i>Thời lượng: <strong class="text-dark">{{ p.thoi_luong_lam_bai }} phút</strong></div>
+                        </div>
+                        
+                        <button class="btn btn-primary w-100" style="border-radius: 10px;" onclick="enterRoom('{{ p.id }}', {{ 'true' if p.co_mat_khau else 'false' }}, '{{ p.ten_phong }}')">
+                            <i class="fas fa-sign-in-alt me-1"></i> Vào phòng này
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12 text-center py-5" style="background: #f8fafc; border-radius: 16px; border: 1px dashed #e2e8f0;">
+                    <i class="fas fa-box-open fs-1 text-muted mb-3 opacity-50"></i>
+                    <h5 class="text-muted">Hiện tại chưa có phòng thi nào đến giờ mở.</h5>
+                    <p class="small text-muted">Vui lòng quay lại sau theo đúng lịch hẹn của Giáo viên.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="passwordModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold text-dark"><i class="fas fa-lock me-2" style="color: #dc2626;"></i>Mật khẩu phòng thi</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center pb-4">
+                <p class="text-muted mb-3">Phòng: <strong id="modalRoomName" class="text-dark"></strong></p>
+                <input type="text" id="modalPasswordInput" class="form-control form-control-dark text-center fw-bold" placeholder="Nhập mật khẩu..." style="font-size: 1.2rem; letter-spacing: 2px;">
+                <div id="modalErrorMsg" class="text-danger small mt-2 d-none"><i class="fas fa-exclamation-circle me-1"></i>Mật khẩu không chính xác!</div>
+            </div>
+            <div class="modal-footer border-0 d-flex gap-2">
+                <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-success flex-grow-1" onclick="verifyAndEnter()" style="background: linear-gradient(135deg, #11998e, #38ef7d); color: #000; font-weight: bold; border: none;">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Xử lý bộ lọc tìm kiếm
+    function filterRooms() {
+        let input = document.getElementById('searchInput').value.toLowerCase();
+        let cards = document.getElementsByClassName('room-card-item');
+        
+        for (let i = 0; i < cards.length; i++) {
+            let dataSpan = cards[i].querySelector('.search-data');
+            if (dataSpan.innerHTML.toLowerCase().indexOf(input) > -1) {
+                cards[i].style.display = "";
+            } else {
+                cards[i].style.display = "none";
+            }
+        }
+    }
+
+    // Xử lý Mật khẩu
+    let currentRoomId = "";
+    let passModal = null;
+
+    // Gửi POST /vao-phong — SERVER tự xác thực mật khẩu (không lộ mật khẩu ra client).
+    function submitVaoPhong(roomId, pass) {
+        let f = document.createElement('form');
+        f.method = 'POST';
+        f.action = '/vao-phong';
+        f.innerHTML =
+            '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">' +
+            '<input type="hidden" name="phong_id">' +
+            '<input type="hidden" name="mat_khau">';
+        f.querySelector('[name="phong_id"]').value = roomId;
+        f.querySelector('[name="mat_khau"]').value = pass;
+        document.body.appendChild(f);
+        f.submit();
+    }
+
+    // Phòng KHÔNG mật khẩu -> vào thẳng; phòng CÓ mật khẩu -> mở hộp nhập mật khẩu.
+    function enterRoom(roomId, hasPass, roomName) {
+        if (!hasPass) { submitVaoPhong(roomId, ''); return; }
+        openPasswordModal(roomId, roomName);
+    }
+
+    function openPasswordModal(roomId, roomName) {
+        // Khởi tạo lazily để chắc chắn Bootstrap đã load xong
+        if (!passModal) {
+            const modalEl = document.getElementById('passwordModal');
+            // Đưa modal ra thẳng <body> để thoát khỏi stacking context của
+            // .tab-pane (animation paneFade/fadeInUp) — nếu không, lớp phủ xám
+            // sẽ che lên trên cả khung nhập mật khẩu và không click được.
+            if (modalEl.parentElement !== document.body) {
+                document.body.appendChild(modalEl);
+            }
+            passModal = new bootstrap.Modal(modalEl);
+        }
+        currentRoomId = roomId;
+        document.getElementById('modalRoomName').innerText = roomName;
+        document.getElementById('modalPasswordInput').value = "";
+        document.getElementById('modalErrorMsg').classList.add('d-none');
+        passModal.show();
+    }
+
+    function verifyAndEnter() {
+        // SERVER xác thực; nếu sai server trả trang lỗi. Không kiểm mật khẩu ở client.
+        let inputPass = document.getElementById('modalPasswordInput').value.trim();
+        submitVaoPhong(currentRoomId, inputPass);
+    }
+
+    // Bắt sự kiện nhấn Enter trong ô nhập
+    document.getElementById('modalPasswordInput').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            verifyAndEnter();
+        }
+    });
+</script>

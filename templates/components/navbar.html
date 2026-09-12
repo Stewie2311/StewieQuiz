@@ -1,0 +1,1015 @@
+<style>
+    .stewie-navbar {
+        /* Thanh NỔI bo tròn, tách mép kiểu QuizGecko.
+           Nền TRẮNG ĐẶC + bóng rõ + viền để nổi hẳn trên nền sáng. */
+        background: #ffffff;
+        border: 1px solid rgba(192, 203, 227, 0.932);   /* viền xám SIÊU NHẠT */
+        border-radius: 22px !important;
+        box-shadow: 0 12px 34px rgba(23, 32, 52, 0.16), 0 4px 12px rgba(222, 222, 222, 0.08);
+        padding-top: 0px;
+        padding-bottom: 0px;
+        /* Bỏ lớp phủ XANH NHẠT khi CHẠM trên điện thoại (iOS/Android tap highlight). */
+        -webkit-tap-highlight-color: transparent;
+    }
+    /* Thuộc tính tap-highlight được kế thừa, nhưng ép rõ cho mọi link/nút trong navbar
+       để chắc chắn không còn ô xanh nhạt loang khi bấm đề mục lớn. */
+    .stewie-navbar a,
+    .stewie-navbar .nav-link,
+    .stewie-navbar .dropdown-item,
+    .stewie-navbar .navbar-toggler { -webkit-tap-highlight-color: transparent; }
+    /* ⚠️ navbar.css (cũ) có `.nav-item:hover, .nav-item.active { background: var(--primary-soft) }`
+       -> khi CHẠM đề mục lớn, cả <li> (kèm submenu vừa mở) bị phủ XANH NHẠT.
+       Ép TRONG SUỐT cho mọi <li> của thanh này (chỉ .nav-link mới có nền hover riêng). */
+    .stewie-navbar .nav-item:hover,
+    .stewie-navbar .nav-item.active,
+    .stewie-navbar .stewie-room-hover.open { background: transparent !important; }
+    /* Đè .fixed-top của Bootstrap: tách mép 2 bên + canh giữa + giới hạn bề rộng.
+       Ép !important để CHẮC CHẮN không bị Bootstrap (.fixed-top: left/right:0) đè. */
+    .stewie-navbar.fixed-top {
+        top: 8px !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: fit-content !important;       /* ÔM GỌN nội dung -> avatar LUÔN nằm trong nền trắng */
+        max-width: calc(100% - 32px) !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        transform: none !important;
+    }
+    /* Cụm avatar bên phải rộng NGANG với logo bên trái (vùng cân nhau) -> menu giữa
+       căn ĐÚNG TÂM, không lệch phải; vì thanh ôm gọn nên avatar vẫn nằm trong nền. */
+    .stewie-navbar .navbar-nav.flex-shrink-0 { min-width: 56px; }
+    /* Màn hình thu gọn (menu sập vào nút ☰): trả về dải gần đủ rộng để menu dọc có chỗ */
+    @media (max-width: 991.98px) {
+        .stewie-navbar.fixed-top { width: auto !important; left: 10px !important; right: 10px !important; max-width: none !important; }
+    }
+    @media (max-width: 575px) {
+        .stewie-navbar.fixed-top { top: 8px !important; left: 8px !important; right: 8px !important; border-radius: 22px !important; }
+    }
+    /* ===== Cụm tài khoản (avatar) — LUÔN nằm NGOÀI menu sập, hiện trên thanh =====
+       Trên MÁY TÍNH: đẩy sang PHẢI cùng hàng (order lớn hơn menu giữa).
+       Trên ĐIỆN THOẠI: nằm cạnh nút ☰ trên hàng đầu; menu đề mục sập xuống dưới. */
+    .stewie-navbar .stewie-account { margin: 0; }
+    @media (min-width: 992px) {
+        .stewie-navbar .navbar-collapse { order: 2; }
+        .stewie-navbar .stewie-account { order: 3; margin-left: 12px; }
+    }
+    /* Điện thoại/tablet: hàng đầu = ☰ • LOGO • AVATAR (đề mục ẩn trong ☰).
+       Nút ☰ dời sang TRÁI, đứng TRƯỚC logo -> tách xa avatar cho khỏi 2 icon lẫn nhau. */
+    @media (max-width: 991.98px) {
+        /* nút ☰ ở NGOÀI CÙNG bên trái, trước logo */
+        .stewie-navbar .navbar-toggler { order: 0; margin-right: 10px; }
+        .stewie-navbar .navbar-brand { order: 1; }
+        /* avatar dồn về SÁT MÉP PHẢI (đè responsive.css ép rộng 100%) */
+        .stewie-navbar .stewie-account {
+            order: 2; width: auto !important; margin-left: auto; margin-right: 0;
+            align-items: center !important;
+        }
+        .stewie-navbar .stewie-account .nav-link.stewie-user-pill {
+            width: 32px !important; height: 32px !important; margin: 0 !important;
+        }
+        /* menu đề mục: sập xuống HÀNG DƯỚI khi bấm ☰ */
+        .stewie-navbar .navbar-collapse { order: 3; }
+        /* dropdown tài khoản canh phải, nổi lên (không chiếm luồng) */
+        .stewie-navbar .stewie-account .dropdown-menu {
+            width: auto !important; min-width: 190px;
+            position: absolute !important; right: 0 !important; left: auto !important;
+        }
+        /* chạm (mobile) không có hover -> ẩn thẻ tên/role bay ra */
+        .stewie-navbar .stewie-account .user-hovercard { display: none !important; }
+    }
+    @media (max-width: 575px) {
+        .stewie-navbar .container-fluid { padding-left: 10px !important; padding-right: 10px !important; }
+        .stewie-navbar .stewie-account { margin-right: 6px; }
+    }
+    .stewie-navbar .navbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        margin-right: 8px;
+        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    /* ===== LOGO + TÊN THƯƠNG HIỆU (pill-style) ===== */
+    .brand-logo-group {
+        background: #ffffff;
+        border-radius: 50px;
+        padding: 6px 18px 6px 10px;
+        transition: box-shadow 0.3s ease, transform 0.3s ease;
+    }
+    .stewie-navbar .navbar-brand:hover .brand-logo-group {
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        transform: scale(1.02);
+    }
+    .brand-logo-img {
+        animation: brandLogoGlow 4s ease-in-out infinite;
+    }
+    @keyframes brandLogoGlow {
+        0%, 100% { filter: brightness(1) saturate(1); }
+        50%      { filter: brightness(1.15) saturate(1.2); }
+    }
+    .brand-text-vn {
+        font-family: 'Orbitron', sans-serif;
+        font-weight: 900;
+        font-size: 1.2rem;                 /* thu nhỏ 1 xíu (1.35 -> 1.2rem) */
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        position: relative;                /* mốc cho lớp sáng ::after */
+        display: inline-block;
+        color: #000000;                    /* GIỮ màu đen, LUÔN hiển thị */
+        text-shadow: 0.2px 0 0 #000, -0.2px 0 0 #000, 0 0.2px 0 #000, 0 -0.2px 0 #000;
+    }
+    /* Lớp phủ ánh sáng: cùng chữ (data-text), cắt gradient theo chữ.
+       Bình thường ẩn hẳn (opacity:0) -> chữ đen gốc không bị ảnh hưởng. */
+    .brand-text-vn::after {
+        content: attr(data-text);
+        position: absolute;
+        left: 0; top: 0;
+        pointer-events: none;
+        opacity: 0;
+        background: linear-gradient(110deg,
+            transparent 0%, transparent 42%,
+            rgba(255, 255, 255, 0.95) 50%,
+            transparent 58%, transparent 100%);
+        background-size: 220% 100%;
+        background-repeat: no-repeat;
+        background-position: 200% 0;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        color: transparent;
+    }
+    /* Rê chuột: bật lớp sáng, dải sáng quét 1 lượt TRÁI -> PHẢI qua chữ */
+    .stewie-navbar .navbar-brand:hover .brand-text-vn::after {
+        animation: tenLogoShine 0.9s ease;
+    }
+    @keyframes tenLogoShine {
+        0%   { opacity: 1; background-position: 200% 0; }
+        100% { opacity: 1; background-position: -120% 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .stewie-navbar .navbar-brand:hover .brand-text-vn::after { animation: none; }
+    }
+    .stewie-navbar .navbar-brand:hover .brand-logo-img {
+        animation: brandLogoHover 0.6s ease;
+    }
+    @keyframes brandLogoHover {
+        0%   { transform: scale(1) rotate(0deg); }
+        40%  { transform: scale(1.12) rotate(-8deg); }
+        70%  { transform: scale(1.12) rotate(5deg); }
+        100% { transform: scale(1.05) rotate(0deg); }
+    }
+    /* Hàng menu giữa: luôn 1 hàng, không xuống dòng */
+    .stewie-navbar .navbar-nav.mx-auto { flex-wrap: nowrap; }
+    .stewie-navbar .nav-item .nav-link {
+        font-family: var(--font-sans);      /* ĐỒNG NHẤT với toàn site (Be Vietnam Pro) — bỏ Poppins cho hết nét đậm-nhạt không đều */
+        display: inline-flex;               /* căn icon + chữ vào GIỮA ô theo chiều dọc */
+        align-items: center;
+        gap: 7px;                           /* cách icon với tên đề mục 1 khoảng */
+        color: #111111 !important;          /* CHỮ ĐEN rõ */
+        font-weight: 600;                   /* semibold đều nét (không bị trình duyệt "giả đậm") */
+        -webkit-font-smoothing: antialiased;  /* khử răng cưa -> chữ NÉT, hết mờ */
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+        border: 2px solid transparent;      /* VIỀN Ô (2px) -> hover hiện viền, không giật */
+        border-radius: 14px !important;     /* bo tròn (ép !important để thắng square.css) */
+        padding: 6px 14px !important;         /* nền xanh hover to rộng, dễ bấm */
+        margin: 0;                           /* sát nhau hơn cho gọn */
+        line-height: 1;                     /* siết khoảng trống trên-dưới chữ -> thanh mỏng */
+        font-size: 0.95rem;                 /* to hơn 1 xíu cho dễ đọc */
+        letter-spacing: 0;                  /* bỏ nén âm -> chữ thoáng, không bị nhòe */
+        background: transparent !important;  /* bỏ mọi nền box mặc định */
+        white-space: nowrap;
+        /* SIÊU MƯỢT: chỉ animate màu chữ + nền (rẻ, mượt). KHÔNG transition
+           box-shadow/border-radius (repaint nặng -> gây giật khi quét nhanh). */
+        transition: color 0.07s linear, background-color 0.07s linear, border-color 0.07s linear;
+        position: relative;
+        outline: none !important;            /* bỏ outline vuông mặc định */
+    }
+    /* Khi focus/giữ chuột: KHÔNG hiện outline mặc định, giữ bo góc ô vuông */
+    .stewie-navbar .nav-item .nav-link:focus,
+    .stewie-navbar .nav-item .nav-link:focus-visible,
+    .stewie-navbar .nav-item .nav-link:active {
+        outline: none !important;
+        box-shadow: none !important;
+        border-radius: 14px !important;
+    }
+    /* Thu nhỏ dần theo bề rộng để 6 mục (kèm nhãn dài "Thư viện cá nhân")
+       vẫn luôn nằm gọn trên 1 hàng, không bị xuống dòng. */
+    @media (min-width: 992px) and (max-width: 1400px) {
+        .stewie-navbar .nav-item .nav-link {
+            padding: 8px 10px !important;
+            font-size: 0.83rem;
+        }
+        .stewie-navbar .nav-item .nav-link i { margin-right: 3px !important; }
+    }
+    @media (min-width: 992px) and (max-width: 1150px) {
+        .stewie-navbar .nav-item .nav-link {
+            padding: 6px 8px !important;
+            font-size: 0.78rem;
+        }
+        .stewie-navbar .nav-item .nav-link i { margin-right: 2px !important; }
+    }
+    .stewie-navbar .nav-item .nav-link i {
+        display: inline-flex;
+        align-items: center;
+        transform-origin: center center;      /* phóng to TỪ TÂM */
+        backface-visibility: hidden;          /* tăng tốc GPU -> hết rỗ/giật */
+        transform: translateZ(0);
+        transition: transform 0.3s ease, color 0.25s ease;  /* mượt khi lia RA */
+        will-change: transform;
+    }
+    /* Pop mềm khi hover (kiểu micro-interaction trên các trang icon) */
+    @keyframes navIconPop {
+        0%   { transform: scale(1); }
+        50%  { transform: scale(1.38); }
+        100% { transform: scale(1.18); }
+    }
+    /* HOVER: ô ĐEN vuông (không bo tròn), chữ TRẮNG, KHÔNG phóng to.
+       Lia chuột ra -> tự trở về chữ đen nền trắng như cũ. */
+    .stewie-navbar .nav-item .nav-link:hover {
+        color: #ffffff !important;
+        background: #001196 !important;
+        border-color: #001196;                /* viền 3px cùng màu -> khối liền */
+        border-radius: 14px !important;       /* bo tròn nền hover nhiều hơn (snap, không giật) */
+        box-shadow: none;                     /* bỏ bóng đổ -> hết repaint nặng, quét cực mượt */
+    }
+    /* Hover: CHỈ ICON chuyển động (nảy/phóng), chữ giữ nguyên. Icon màu trắng. */
+    .stewie-navbar .nav-item .nav-link:hover i {
+        animation: navIconPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        color: #ffffff !important;
+    }
+    /* Trang hiện tại (.active) khi KHÔNG hover: giữ như mặc định (xám, không nền).
+       Dùng :not(:hover) để hover vẫn ra ô đen như mọi mục khác. */
+    .stewie-navbar .nav-item .nav-link.active:not(:hover) {
+        color: #79a3de !important;
+        background: transparent !important;
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    /* ===== Mũi tên ▾ cho mục có submenu: xoay LÊN khi lia vào, xuống lại khi lia ra ===== */
+    .stewie-navbar .nav-item .nav-link .nav-caret {
+        font-size: 0.62rem;
+        margin-left: -1px;
+        transform: rotate(0deg);                 /* mặc định: mũi tên nhìn XUỐNG */
+        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    /* Lia vào mục -> mũi tên xoay NGƯỢC LÊN */
+    .stewie-room-hover:hover > .nav-link .nav-caret {
+        transform: rotate(180deg);
+    }
+    /* Mũi tên KHÔNG dùng hiệu ứng nảy (navIconPop) như icon chính -> chỉ xoay */
+    .stewie-navbar .nav-item .nav-link:hover .nav-caret {
+        animation: none !important;
+    }
+
+    /* ===== MEGA-MENU kiểu QuizGecko: lia chuột mở mượt, icon trong ô bo tròn ===== */
+    .stewie-room-hover { position: relative; }
+    .stewie-room-hover > .dropdown-menu {
+        display: block;                 /* luôn render để CHẠY hiệu ứng (không dùng display:none) */
+        opacity: 0; visibility: hidden;
+        transform: translateY(12px) scale(.97);
+        transform-origin: top left;
+        transition: opacity .24s var(--ease), transform .24s var(--ease), visibility .24s;
+        pointer-events: none;
+        position: absolute; top: 100%; left: 0; margin-top: 0;
+        min-width: 300px; padding: 10px;
+        border: 1px solid var(--border); border-radius: 18px !important;
+        background: #fff; box-shadow: var(--shadow-lg);
+    }
+    .stewie-room-hover:hover > .dropdown-menu {
+        opacity: 1; visibility: visible; transform: translateY(0) scale(1); pointer-events: auto;
+    }
+    .stewie-room-hover .dropdown-item {
+        display: flex; align-items: center; gap: 12px;
+        padding: 11px 12px; border-radius: 14px !important; margin-bottom: 2px;
+        font-weight: 700; font-size: 0.9rem; color: var(--text-secondary); white-space: nowrap;
+        transition: background .18s var(--ease), transform .18s var(--ease), color .18s;
+    }
+    .stewie-room-hover .dropdown-item i {
+        width: 40px; height: 40px; flex-shrink: 0; text-align: center;
+        display: inline-flex; align-items: center; justify-content: center;
+        border-radius: 11px !important; background: var(--primary-softer); color: var(--primary);
+        font-size: 1.02rem; margin: 0; transition: all .2s var(--ease);
+    }
+    .stewie-room-hover .dropdown-item:hover {
+        background: var(--primary-softer); color: var(--primary-dark); transform: translateX(5px);
+    }
+    .stewie-room-hover .dropdown-item:hover i {
+        background: var(--grad-primary); color: #fff; transform: scale(1.08) rotate(-5deg);
+    }
+
+    /* ===== MEGA "Tạo": 2 cột — trái danh sách (kèm mô tả), phải tấm trang trí ===== */
+    .stewie-mega-create > .dropdown-menu,
+    .stewie-mega-lib > .dropdown-menu,
+    .stewie-mega-lop > .dropdown-menu,
+    .stewie-mega-room > .dropdown-menu,
+    .stewie-mega-admin > .dropdown-menu {
+        display: flex; gap: 10px; padding: 12px;
+    }
+    .stewie-mega-create > .dropdown-menu { min-width: 600px; }
+    .stewie-mega-lib > .dropdown-menu { min-width: 640px; }
+    .stewie-mega-room > .dropdown-menu { min-width: 470px; }   /* THU NGẮN cho khỏi tràn mép phải */
+    .stewie-mega-lop > .dropdown-menu { min-width: 470px; }    /* CÓ min-width như các mục khác -> tấm trang trí hiện ĐỦ, không bị cắt cụt */
+    .stewie-mega-create .mega-left,
+    .stewie-mega-lib .mega-left,
+    .stewie-mega-lop .mega-left,
+    .stewie-mega-room .mega-left,
+    .stewie-mega-admin .mega-left {
+        flex: 1 1 auto; min-width: 240px; display: flex; flex-direction: column;
+    }
+    .stewie-mega-create .mega-item,
+    .stewie-mega-lib .mega-item,
+    .stewie-mega-lop .mega-item,
+    .stewie-mega-room .mega-item,
+    .stewie-mega-admin .mega-item { align-items: flex-start; white-space: normal; }
+    .stewie-mega-create .mega-item i,
+    .stewie-mega-lib .mega-item i,
+    .stewie-mega-lop .mega-item i,
+    .stewie-mega-room .mega-item i,
+    .stewie-mega-admin .mega-item i { margin-top: 1px; }
+    .mega-it-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .mega-it-title { font-weight: 800; color: var(--text-primary); font-size: 0.92rem; line-height: 1.25; }
+    .mega-it-desc  { font-weight: 500; color: var(--text-muted); font-size: 0.78rem;
+                     line-height: 1.4; white-space: normal; }
+    .stewie-mega-create .mega-item:hover .mega-it-title,
+    .stewie-mega-lib .mega-item:hover .mega-it-title,
+    .stewie-mega-lop .mega-item:hover .mega-it-title,
+    .stewie-mega-room .mega-item:hover .mega-it-title,
+    .stewie-mega-admin .mega-item:hover .mega-it-title { color: var(--primary-dark); }
+    /* "Quản trị": mở sang BÊN PHẢI (left:0 mặc định như các mục kia), kèm tấm trang trí. */
+    .stewie-mega-admin > .dropdown-menu { min-width: 470px; }
+
+    /* Tấm trang trí vàng-chanh + logo bong bóng Q/A (giống QuizGecko) */
+    .stewie-mega-create .mega-right,
+    .stewie-mega-lib .mega-right,
+    .stewie-mega-lop .mega-right,
+    .stewie-mega-room .mega-right,
+    .stewie-mega-admin .mega-right {
+        flex: 0 0 230px; border-radius: 26px !important; overflow: visible; position: relative;
+        background: linear-gradient(135deg, #cef23f 0%, #b6ea2e 100%);
+        display: flex; align-items: center; justify-content: center;
+    }
+    /* Lớp học: tấm trang trí TÍM — gọn như Phòng thi/Quản trị để hiện đủ 2 bubble */
+    .stewie-mega-lop .mega-right {
+        flex: 0 0 165px;
+        background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+        border-radius: 28px !important;
+    }
+    /* Quản trị: tấm trang trí GỌN + nền CAM + bo tròn rõ */
+    .stewie-mega-admin .mega-right {
+        flex: 0 0 165px;
+        background: linear-gradient(135deg, #fdba74 0%, #f97316 100%);
+        border-radius: 28px !important;
+    }
+    /* Thư viện: tấm trang trí RỘNG HẲN theo chiều ngang + nền XANH LAM + bo tròn RÕ
+       (đè nền lime & bán kính chung; !important để thắng square.css). */
+    .stewie-mega-lib .mega-right {
+        flex: 0 0 360px;
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        border-radius: 28px !important;
+    }
+    /* Phòng thi: tấm trang trí GỌN + nền ĐỎ NHẠT + bo tròn rõ (thu hẹp cho menu ngắn lại) */
+    .stewie-mega-room .mega-right {
+        flex: 0 0 165px;
+        background: linear-gradient(135deg, #fca5a5 0%, #f87171 100%);
+        border-radius: 28px !important;
+    }
+    /* ===== Bong bóng chat Q/A vẽ bằng CSS (giống logo QuizGecko trong ảnh mẫu) =====
+       Bong bóng A xanh lá nằm trên-phải (phía sau), bong bóng Q hồng nằm dưới-trái
+       (phía trước, đè lên), mỗi cái có đuôi nhọn nhỏ chỉ xuống. */
+    .stewie-mega-create .mega-deco,
+    .stewie-mega-lib .mega-deco,
+    .stewie-mega-lop .mega-deco,
+    .stewie-mega-room .mega-deco,
+    .stewie-mega-admin .mega-deco {
+        position: relative;
+        width: 75px; height: 64px;
+    }
+    .stewie-mega-create .mega-bubble,
+    .stewie-mega-lib .mega-bubble,
+    .stewie-mega-lop .mega-bubble,
+    .stewie-mega-room .mega-bubble,
+    .stewie-mega-admin .mega-bubble {
+        position: absolute;
+        display: flex; align-items: center; justify-content: center;
+        font-family: 'Poppins', sans-serif; font-weight: 800; color: #fff;
+        line-height: 1; border-radius: 50% !important;   /* !important để thắng square.css */
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.20);
+    }
+    .stewie-mega-create .mega-bubble::after,
+    .stewie-mega-lib .mega-bubble::after,
+    .stewie-mega-lop .mega-bubble::after,
+    .stewie-mega-room .mega-bubble::after,
+    .stewie-mega-admin .mega-bubble::after {   /* đuôi nhọn của bong bóng */
+        content: ''; position: absolute; bottom: -4px;
+        width: 0; height: 0; border-top-width: 9px; border-top-style: solid;
+    }
+    /* Bong bóng A — xanh lá, to, trên-phải, đuôi chỉ xuống-phải */
+    .stewie-mega-create .mb-a {
+        width: 45px; height: 45px; top: 0; right: 2px; z-index: 1;
+        font-size: 1.35rem;
+        background: linear-gradient(135deg, #45db6c 0%, #25bd4f 100%);
+    }
+    .stewie-mega-create .mb-a::after {
+        left: 12px;
+        border-right: 7px solid transparent;
+        border-top-color: #2bc154;
+    }
+    /* Bong bóng Q — hồng, nhỏ hơn, dưới-trái, ở TRƯỚC, đuôi chỉ xuống-trái */
+    .stewie-mega-create .mb-q {
+        width: 38px; height: 38px; bottom: 2px; left: 1px; z-index: 2;
+        font-size: 1.15rem;
+        background: linear-gradient(135deg, #ff6a8b 0%, #f43e6b 100%);
+    }
+    .stewie-mega-create .mb-q::after {
+        right: 9px;
+        border-left: 7px solid transparent;
+        border-top-color: #f6446f;
+    }
+    /* Lia vào menu "Tạo" -> 2 bong bóng nảy nhẹ sinh động */
+    .stewie-mega-create:hover .mb-a { animation: megaBubblePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .stewie-mega-create:hover .mb-q { animation: megaBubblePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.07s; }
+    @keyframes megaBubblePop {
+        0%   { transform: scale(0.6); opacity: 0.4; }
+        60%  { transform: scale(1.1); opacity: 1; }
+        100% { transform: scale(1); }
+    }
+
+    /* ===== Thư viện: 2 bong bóng icon (thư mục + sách) — y kiểu Tạo, đổi icon hợp chức năng ===== */
+    /* Bong bóng thư mục — VÀNG HỔ PHÁCH (tương phản nền xanh), to, trên-phải (phía sau) */
+    .stewie-mega-lib .lb-back {
+        width: 45px; height: 45px; top: 0; right: 2px; z-index: 1;
+        font-size: 1.15rem;
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    }
+    .stewie-mega-lib .lb-back::after {
+        left: 12px; border-right: 7px solid transparent; border-top-color: #f59e0b;
+    }
+    /* Bong bóng sách — HỒNG (tương phản nền xanh), nhỏ hơn, dưới-trái (phía trước) */
+    .stewie-mega-lib .lb-front {
+        width: 38px; height: 38px; bottom: 2px; left: 1px; z-index: 2;
+        font-size: 0.95rem;
+        background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+    }
+    .stewie-mega-lib .lb-front::after {
+        right: 9px; border-left: 7px solid transparent; border-top-color: #e11d48;
+    }
+    .stewie-mega-lib:hover .lb-back { animation: megaBubblePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .stewie-mega-lib:hover .lb-front { animation: megaBubblePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.07s; }
+
+    /* ===== Phòng thi: 2 bong bóng icon (cửa phòng + bảng kiểm) — đỏ, trên nền đỏ nhạt ===== */
+    /* Bong bóng cửa phòng — VÀNG HỔ PHÁCH (tương phản nền đỏ), to, trên-phải (phía sau) */
+    .stewie-mega-room .rb-back {
+        width: 45px; height: 45px; top: 0; right: 2px; z-index: 1;
+        font-size: 1.15rem;
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    }
+    .stewie-mega-room .rb-back::after {
+        left: 12px; border-right: 7px solid transparent; border-top-color: #f59e0b;
+    }
+    /* Bong bóng bảng kiểm — TÍM (tương phản nền đỏ), nhỏ hơn, dưới-trái (phía trước) */
+    .stewie-mega-room .rb-front {
+        width: 38px; height: 38px; bottom: 2px; left: 1px; z-index: 2;
+        font-size: 0.95rem;
+        background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+    }
+    .stewie-mega-room .rb-front::after {
+        right: 9px; border-left: 7px solid transparent; border-top-color: #7c3aed;
+    }
+    .stewie-mega-room:hover .rb-back { animation: megaBubblePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .stewie-mega-room:hover .rb-front { animation: megaBubblePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.07s; }
+
+    /* ===== Quản trị: 2 bong bóng icon (khiên admin + bánh răng) — CAM, trên nền cam ===== */
+    /* Bong bóng khiên — XANH DƯƠNG (tương phản nền cam), to, trên-phải (phía sau) */
+    .stewie-mega-admin .ab-back {
+        width: 45px; height: 45px; top: 0; right: 2px; z-index: 1;
+        font-size: 1.15rem;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    }
+    .stewie-mega-admin .ab-back::after {
+        left: 12px; border-right: 7px solid transparent; border-top-color: #2563eb;
+    }
+    /* Bong bóng bánh răng — XANH NGỌC (tương phản nền cam), nhỏ hơn, dưới-trái (phía trước) */
+    .stewie-mega-admin .ab-front {
+        width: 38px; height: 38px; bottom: 2px; left: 1px; z-index: 2;
+        font-size: 0.95rem;
+        background: linear-gradient(135deg, #2dd4bf 0%, #14b8a6 100%);
+    }
+    .stewie-mega-admin .ab-front::after {
+        right: 9px; border-left: 7px solid transparent; border-top-color: #14b8a6;
+    }
+    .stewie-mega-admin:hover .ab-back { animation: megaBubblePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .stewie-mega-admin:hover .ab-front { animation: megaBubblePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.07s; }
+
+    /* ===== Lớp học: 2 bong bóng icon (lớp học + giáo viên) — trên nền TÍM ===== */
+    /* Bong bóng lớp học — VÀNG HỔ PHÁCH (tương phản nền tím), to, trên-phải (phía sau) */
+    .stewie-mega-lop .lp-back {
+        width: 45px; height: 45px; top: 0; right: 2px; z-index: 1;
+        font-size: 1.15rem;
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    }
+    .stewie-mega-lop .lp-back::after {
+        left: 12px; border-right: 7px solid transparent; border-top-color: #f59e0b;
+    }
+    /* Bong bóng giáo viên — XANH NGỌC (tương phản nền tím), nhỏ hơn, dưới-trái (phía trước) */
+    .stewie-mega-lop .lp-front {
+        width: 38px; height: 38px; bottom: 2px; left: 1px; z-index: 2;
+        font-size: 0.95rem;
+        background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%);
+    }
+    .stewie-mega-lop .lp-front::after {
+        right: 9px; border-left: 7px solid transparent; border-top-color: #06b6d4;
+    }
+    .stewie-mega-lop:hover .lp-back { animation: megaBubblePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .stewie-mega-lop:hover .lp-front { animation: megaBubblePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.07s; }
+
+    /* ===== Mobile (menu thu gọn): ACCORDION như thao tác CLICK trên máy tính —
+       chỉ hiện ĐỀ MỤC LỚN kèm mũi tên ▾; BẤM vào mới xổ các đề mục nhỏ bên trong.
+       (Không dùng hover vì điện thoại không có hover.) ===== */
+    @media (max-width: 991px) {
+        /* Đề mục lớn = KHỐI xếp dọc: đề mục lớn ở trên, submenu NẰM NGAY DƯỚI
+           (không để nav-item thành flex-row khiến submenu nhảy sang PHẢI + đề mục lớn lệch tâm). */
+        .stewie-navbar .stewie-room-hover { display: block !important; width: 100%; }
+        .stewie-room-hover > .nav-link { display: flex !important; width: 100%; }
+
+        /* Submenu ẨN mặc định (ghi đè cả position:absolute + display:flex của mega) */
+        .stewie-room-hover > .dropdown-menu {
+            display: none !important;
+            position: static !important; float: none !important;
+            inset: auto !important; transform: none !important;
+            width: 100% !important; min-width: 0 !important; max-width: 100% !important;
+            margin: 0 !important; padding: 2px 0 8px 0.75rem !important;
+            border: none !important; box-shadow: none !important; background: transparent !important;
+            opacity: 1; visibility: visible; pointer-events: auto;
+        }
+        /* Bấm mở -> hiện KHỐI, các đề mục nhỏ xếp DỌC NGAY DƯỚI đề mục lớn */
+        .stewie-room-hover.open > .dropdown-menu { display: block !important; }
+
+        /* Mũi tên ▾: chỉ xuống; ĐANG MỞ -> xoay ngược lên (đề mục lớn KHÔNG dời chỗ) */
+        .stewie-room-hover > .nav-link .nav-caret { transition: transform .25s ease; }
+        .stewie-room-hover.open > .nav-link .nav-caret { transform: rotate(180deg); }
+
+        /* Ẩn tấm trang trí bên phải; danh sách trái chiếm đủ ngang, xếp dọc */
+        .stewie-mega-create .mega-right,
+        .stewie-mega-lib .mega-right,
+        .stewie-mega-lop .mega-right,
+        .stewie-mega-room .mega-right,
+        .stewie-mega-admin .mega-right { display: none !important; }
+        .stewie-mega-create .mega-left,
+        .stewie-mega-lib .mega-left,
+        .stewie-mega-lop .mega-left,
+        .stewie-mega-room .mega-left,
+        .stewie-mega-admin .mega-left {
+            display: flex !important; flex-direction: column !important;
+            width: 100% !important; min-width: 0 !important; gap: 0 !important;
+        }
+        /* ĐỀ MỤC NHỎ GỌN: ẩn mô tả dài, thu nhỏ ô icon -> chỉ còn dòng link ngắn. */
+        .stewie-room-hover .mega-it-desc { display: none !important; }
+        .stewie-room-hover .dropdown-item.mega-item {
+            padding: 8px 10px; margin-bottom: 0; align-items: center; white-space: nowrap;
+        }
+        .stewie-room-hover .dropdown-item i {
+            width: 30px; height: 30px; font-size: 0.9rem; margin-top: 0;
+        }
+        .stewie-room-hover .mega-it-title { font-size: 0.9rem; }
+    }
+    /* Nút tài khoản: CHỈ icon, dạng TRÒN — dùng selector đủ MẠNH để KHÔNG bị
+       style "ô đen pill" của đề mục (.nav-link) đè lên (gây vuông + lệch tâm). */
+    .stewie-navbar .nav-item .nav-link.stewie-user-pill {
+        width: 28px;                        /* vuông cạnh -> kết hợp 50% thành TRÒN đều */
+        height: 28px;
+        padding: 0 !important;
+        gap: 0 !important;
+        border-radius: 50% !important;      /* HÌNH TRÒN */
+        justify-content: center;
+        background: var(--surface-2) !important;   /* bình thường: nền sáng như cũ */
+        border: 1px solid var(--border) !important;
+        box-shadow: none !important;
+        transition: all 0.25s ease;
+    }
+    /* HOVER: nền ĐEN, icon đổi sang TRẮNG — KHÔNG đổi kích thước nút
+       (giữ tròn cố định để không đẩy các đề mục sang trái) */
+    .stewie-navbar .nav-item .nav-link.stewie-user-pill:hover {
+        background: #2563eb !important;       /* xanh dương vừa (nhạt hơn navy) */
+        border-color: #2563eb !important;
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3) !important;
+        transform: translateY(-1px);
+        border-radius: 50% !important;
+    }
+    /* Icon khi hover: TRẮNG + phóng to nảy nhẹ rồi dừng — GIỐNG icon đề mục */
+    .stewie-navbar .nav-item .nav-link.stewie-user-pill:hover i {
+        color: #ffffff !important;
+        animation: navIconPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    /* Ẩn mũi tên ▾ của dropdown -> chỉ còn icon */
+    .stewie-user-pill.dropdown-toggle::after { display: none !important; }
+    .stewie-user-pill .nav-avatar { width: 26px; height: 26px; border: none; box-shadow: none; }
+
+    /* ===== Cửa sổ nhỏ hiện TÊN + ROLE khi lia vào icon người dùng ===== */
+    .user-hovercard {
+        position: absolute; top: calc(100% + 10px); right: 0;
+        min-width: 180px; text-align: left;
+        background: #ffffff; border: 1px solid var(--border);
+        border-radius: 12px !important; box-shadow: var(--shadow-lg);   /* !important để thắng square.css */
+        padding: 10px 14px; z-index: 1100;
+        opacity: 0; visibility: hidden; transform: translateY(-6px);
+        transition: opacity .2s var(--ease), transform .2s var(--ease), visibility .2s;
+        pointer-events: none;
+    }
+    .user-hovercard::before {            /* mũi nhọn nhỏ chỉ lên nút */
+        content: ''; position: absolute; top: -6px; right: 13px;
+        width: 12px; height: 12px; background: #fff;
+        border-left: 1px solid var(--border); border-top: 1px solid var(--border);
+        transform: rotate(45deg);
+    }
+    .user-hovercard .uh-name { font-weight: 700; color: var(--text-primary); font-size: 0.9rem; }
+    .user-hovercard .uh-role {
+        margin-top: 3px; font-size: 0.78rem; color: var(--primary-dark);
+        font-weight: 600; display: flex; align-items: center; gap: 6px;
+    }
+    /* Lia vào nút -> hiện hovercard. Khi mở dropdown (click) thì ẩn để khỏi chồng */
+    .stewie-user-pill:hover + .user-hovercard {
+        opacity: 1; visibility: visible; transform: translateY(0);
+    }
+    .stewie-user-pill.show + .user-hovercard {
+        opacity: 0 !important; visibility: hidden !important;
+    }
+    /* Dropdown tài khoản (bên phải) — bo mềm, đổ bóng đẹp */
+    .stewie-navbar .dropdown-menu {
+        border: 1px solid var(--border);
+        border-radius: 16px !important;   /* !important để thắng square.css */
+        box-shadow: var(--shadow-lg);
+        background: #ffffff;
+        padding: 8px;
+    }
+    .stewie-navbar .dropdown-menu .dropdown-item { border-radius: 10px !important; color: var(--text-secondary); }
+    .stewie-navbar .dropdown-menu .dropdown-item:hover { background: var(--primary-softer); color: var(--primary-dark); }
+    .nav-avatar {
+        width: 30px; height: 30px; border-radius: 50%;
+        object-fit: cover; border: 2px solid rgba(255,255,255,0.7);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    }
+    .nav-avatar-default {
+        overflow: hidden; display: block; flex-shrink: 0;
+    }
+</style>
+
+<nav class="navbar navbar-expand-lg navbar-light fixed-top stewie-navbar">
+    <div class="container-fluid px-3">
+
+        <a class="navbar-brand fw-bold d-flex align-items-center gap-3 brand-logo-group" href="/">
+            <img src="{{ url_for('static', filename='img/logo-truong.png') }}"
+                 alt="Logo" class="navbar-logo brand-logo-img"
+                 style="height: 34px; width: auto; object-fit: contain; background: transparent;">
+            <span class="brand-text-vn ten-logo" data-text="Khoa TT-TT">Khoa TT-TT</span>
+        </a>
+        {# Cụm tài khoản: nằm NGOÀI menu sập -> LUÔN hiện trên thanh (cạnh nút ☰). #}
+        <ul class="navbar-nav align-items-center flex-shrink-0 stewie-account" style="justify-content: flex-end;">
+            <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle d-flex align-items-center stewie-user-pill" href="#" role="button" data-bs-toggle="dropdown">
+                    {% if session.get('avatar') %}
+                        <img src="{{ url_for('static', filename=session.get('avatar')) }}" class="nav-avatar" alt="Ảnh đại diện">
+                    {% else %}
+                        <svg class="nav-avatar nav-avatar-default" viewBox="0 0 36 36" width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="18" cy="18" r="18" fill="#AEB6BF"/>
+                            <circle cx="18" cy="14" r="6" fill="#fff"/>
+                            <path d="M4 36 Q4 22 18 22 Q32 22 32 36 Z" fill="#fff"/>
+                        </svg>
+                    {% endif %}
+                </a>
+                <div class="user-hovercard">
+                    <div class="uh-name">{{ session.get('ho_ten', 'Người dùng') }}</div>
+                    <div class="uh-role">
+                        {% if session.get('role') == 'admin' %}
+                            <i class="fas fa-shield-halved"></i> Quản trị viên
+                        {% elif session.get('role') == 'hoc_sinh' %}
+                            <i class="fas fa-user-graduate"></i> Học sinh
+                        {% else %}
+                            <i class="fas fa-chalkboard-teacher"></i> Giáo viên
+                        {% endif %}
+                    </div>
+                </div>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item py-2" href="{{ url_for('auth.profile') }}"><i class="fas fa-user-cog me-2 text-muted"></i>Hồ sơ cá nhân</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item py-2 text-danger" href="/logout"><i class="fas fa-sign-out-alt me-2"></i>Đăng xuất</a></li>
+                </ul>
+            </li>
+        </ul>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+
+            <ul class="navbar-nav mx-auto align-items-center">
+                {% if session.get('role') == 'hoc_sinh' %}
+                <li class="nav-item">
+                    <a class="nav-link {% if active_tab|default('home') == 'student-room' %}active{% endif %}" href="#" data-tab="student-room">
+                        Phòng Thi
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if active_tab|default('home') == 'student-history' %}active{% endif %}" href="#" data-tab="student-history">
+                        Bài Đã Thi
+                    </a>
+                </li>
+
+                {% else %}
+                {# ====== Giáo viên & Admin: 3 nhóm theo luồng Tạo -> Thư viện -> Phòng thi ====== #}
+                <li class="nav-item dropdown stewie-room-hover stewie-mega-create">
+                    <a class="nav-link {% if active_tab|default('home') == 'exam' or request.path == '/tao_de_thi' or request.path == '/tao_phong' %}active{% endif %}" href="#" data-tab="exam">
+                        Tạo
+                        <i class="fas fa-chevron-down nav-caret"></i>
+                    </a>
+                    <div class="dropdown-menu">
+                        <div class="mega-left">
+                            <a class="dropdown-item mega-item" href="/?tab=exam">
+                                <i class="fas fa-magic"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Tạo câu hỏi</span>
+                                    <span class="mega-it-desc">Biến file PDF thành bộ câu hỏi trắc nghiệm bằng AI.</span>
+                                </span>
+                            </a>
+                            <a class="dropdown-item mega-item" href="/tao_de_thi">
+                                <i class="fas fa-file-circle-plus"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Tạo đề thi</span>
+                                    <span class="mega-it-desc">Đóng gói câu hỏi thành đề thi hoàn chỉnh để mở phòng.</span>
+                                </span>
+                            </a>
+                            <a class="dropdown-item mega-item" href="/tao_phong">
+                                <i class="fas fa-door-open"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Tạo phòng thi</span>
+                                    <span class="mega-it-desc">Mở phòng thi từ đề thi và phát đề cho thí sinh.</span>
+                                </span>
+                            </a>
+                        </div>
+                        <div class="mega-right" aria-hidden="true">
+                            <div class="mega-deco">
+                                <span class="mega-bubble mb-q">Q</span>
+                                <span class="mega-bubble mb-a">A</span>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                <li class="nav-item dropdown stewie-room-hover stewie-mega-lib">
+                    <a class="nav-link {% if active_tab|default('home') == 'library' or request.path == '/ngan_hang' %}active{% endif %}" href="#" data-tab="library">
+                        Thư viện
+                        <i class="fas fa-chevron-down nav-caret"></i>
+                    </a>
+                    <div class="dropdown-menu">
+                        <div class="mega-left">
+                            <a class="dropdown-item mega-item lib-subnav" data-sub="cauhoi" href="/?tab=library&sub=cauhoi">
+                                <i class="fas fa-layer-group"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Câu hỏi của tôi</span>
+                                    <span class="mega-it-desc">Kho câu hỏi bạn đã tạo, sẵn sàng đưa vào đề thi.</span>
+                                </span>
+                            </a>
+                            <a class="dropdown-item mega-item lib-subnav" data-sub="tailieu" href="/?tab=library&sub=tailieu">
+                                <i class="fas fa-file-pdf"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">File PDF</span>
+                                    <span class="mega-it-desc">Tài liệu PDF đã tải lên, dùng lại để tạo câu hỏi.</span>
+                                </span>
+                            </a>
+                            <a class="dropdown-item mega-item lib-subnav" data-sub="nganhang" href="/?tab=library&sub=nganhang">
+                                <i class="fas fa-share-alt"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Ngân hàng câu hỏi</span>
+                                    <span class="mega-it-desc">Câu hỏi dùng chung để tham khảo và tái sử dụng.</span>
+                                </span>
+                            </a>
+                            <a class="dropdown-item mega-item lib-subnav" data-sub="dethi" href="/?tab=library&sub=dethi">
+                                <i class="fas fa-file-lines"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Đề thi</span>
+                                    <span class="mega-it-desc">Các đề thi hoàn chỉnh đã đóng gói, chờ mở phòng.</span>
+                                </span>
+                            </a>
+                        </div>
+                        <div class="mega-right" aria-hidden="true">
+                            <div class="mega-deco">
+                                <span class="mega-bubble lb-back"><i class="fas fa-folder-open"></i></span>
+                                <span class="mega-bubble lb-front"><i class="fas fa-book"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                <li class="nav-item dropdown stewie-room-hover stewie-mega-lop">
+                    <a class="nav-link {% if request.path.startswith('/lop') %}active{% endif %}" href="/lop">
+                        Lớp học
+                        <i class="fas fa-chevron-down nav-caret"></i>
+                    </a>
+                    <div class="dropdown-menu">
+                        <div class="mega-left">
+                            <a class="dropdown-item mega-item lop-subnav" data-sub="all" href="/lop">
+                                <i class="fas fa-globe"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Tất cả các lớp học</span>
+                                    <span class="mega-it-desc">Xem mọi lớp học đang có trong hệ thống.</span>
+                                </span>
+                            </a>
+                            <a class="dropdown-item mega-item lop-subnav" data-sub="my" href="/lop?pill=my">
+                                <i class="fas fa-user-tie"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Lớp học của tôi</span>
+                                    <span class="mega-it-desc">Quản lý lớp bạn đã tạo.</span>
+                                </span>
+                            </a>
+                        </div>
+                        <div class="mega-right" aria-hidden="true">
+                            <div class="mega-deco">
+                                <span class="mega-bubble lp-back"><i class="fas fa-users-rectangle"></i></span>
+                                <span class="mega-bubble lp-front"><i class="fas fa-chalkboard-teacher"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                <li class="nav-item dropdown stewie-room-hover stewie-mega-room">
+                    <a class="nav-link {% if active_tab|default('home') == 'room' %}active{% endif %}" href="#" data-tab="room">
+                        Phòng thi
+                        <i class="fas fa-chevron-down nav-caret"></i>
+                    </a>
+                    <div class="dropdown-menu">
+                        <div class="mega-left">
+                            <a class="dropdown-item mega-item room-subnav" data-pill="all" href="/?tab=room&pill=all">
+                                <i class="fas fa-globe"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Tất cả phòng thi</span>
+                                    <span class="mega-it-desc">Xem mọi phòng thi đang có trong hệ thống.</span>
+                                </span>
+                            </a>
+                            <a class="dropdown-item mega-item room-subnav" data-pill="my" href="/?tab=room&pill=my">
+                                <i class="fas fa-user-tie"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Phòng thi của tôi</span>
+                                    <span class="mega-it-desc">Quản lý phòng bạn tạo và theo dõi kết quả thi.</span>
+                                </span>
+                            </a>
+                            <a class="dropdown-item mega-item room-subnav" data-pill="done" href="/?tab=room&pill=done">
+                                <i class="fas fa-check-circle"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Đã thi xong</span>
+                                    <span class="mega-it-desc">Xem lịch sử các phòng thi đã hoàn thành.</span>
+                                </span>
+                            </a>
+                        </div>
+                        <div class="mega-right" aria-hidden="true">
+                            <div class="mega-deco">
+                                <span class="mega-bubble rb-back"><i class="fas fa-door-open"></i></span>
+                                <span class="mega-bubble rb-front"><i class="fas fa-clipboard-check"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                {% if session.get('role') == 'admin' %}
+                {# ===== Quản trị: dropdown nhỏ (mở từng tab trang /admin qua #hash) — chỉ admin ===== #}
+                <li class="nav-item dropdown stewie-room-hover stewie-mega-admin">
+                    <a class="nav-link {% if request.path.startswith('/admin') %}active{% endif %}" href="/admin">
+                        Quản trị
+                        <i class="fas fa-chevron-down nav-caret"></i>
+                    </a>
+                    <div class="dropdown-menu">
+                        <div class="mega-left">
+                            <a class="dropdown-item mega-item admin-subnav" data-adm="thong-ke" href="/admin#thong-ke">
+                                <i class="fas fa-chart-bar"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Thống kê</span>
+                                    <span class="mega-it-desc">Số liệu tổng quan toàn nền tảng.</span>
+                                </span>
+                            </a>
+                            <a class="dropdown-item mega-item admin-subnav" data-adm="users" href="/admin#users">
+                                <i class="fas fa-users"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Người dùng</span>
+                                    <span class="mega-it-desc">Quản lý tài khoản, phân quyền, khóa/mở.</span>
+                                </span>
+                            </a>
+                            <a class="dropdown-item mega-item admin-subnav" data-adm="prompt" href="/admin#prompt">
+                                <i class="fas fa-robot"></i>
+                                <span class="mega-it-text">
+                                    <span class="mega-it-title">Prompt AI</span>
+                                    <span class="mega-it-desc">Tùy chỉnh system prompt sinh câu hỏi.</span>
+                                </span>
+                            </a>
+                        </div>
+                        <div class="mega-right" aria-hidden="true">
+                            <div class="mega-deco">
+                                <span class="mega-bubble ab-back"><i class="fas fa-shield-halved"></i></span>
+                                <span class="mega-bubble ab-front"><i class="fas fa-gear"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                {% endif %}
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // ===== ĐIỆN THOẠI (menu ☰): bấm ĐỀ MỤC LỚN -> xổ/đóng danh sách con (accordion) =====
+    // Trên máy tính (≥992px) giữ nguyên hành vi hover -> KHÔNG can thiệp.
+    document.querySelectorAll('.stewie-room-hover > .nav-link').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            // Bỏ qua click do JS TỰ GỌI (.lib-subnav/.room-subnav gọi libMain.click()/
+            // roomMain.click() để CHUYỂN tab chính) -> để handler showTab() của index.html
+            // chạy, nếu không sẽ bị stopImmediatePropagation chặn -> Thư viện/Phòng thi "chết".
+            if (!e.isTrusted) return;
+            if (window.matchMedia('(min-width: 992px)').matches) return;   // desktop: bỏ qua
+            e.preventDefault();
+            e.stopImmediatePropagation();                                  // chặn handler điều hướng ?tab=
+            var group = this.closest('.stewie-room-hover');
+            var willOpen = !group.classList.contains('open');
+            // Đóng các nhóm khác cho gọn (chỉ mở 1 nhóm mỗi lúc)
+            document.querySelectorAll('.stewie-room-hover.open').forEach(function (g) {
+                if (g !== group) g.classList.remove('open');
+            });
+            group.classList.toggle('open', willOpen);
+        });
+    });
+
+    // ===== ĐIỆN THOẠI: CHỌN một mục dẫn hướng trong menu ☰ -> tự CUỘN (đóng) menu lại.
+    // Chỉ áp cho mục dẫn hướng (đề mục nhỏ trong dropdown + đề mục phẳng của học sinh),
+    // KHÔNG áp cho đề mục lớn (đó là nút xổ accordion). =====
+    (function () {
+        var collapseEl = document.getElementById('navbarNav');
+        if (!collapseEl) return;
+        function closeMenu() {
+            if (!collapseEl.classList.contains('show')) return;   // desktop/đang đóng: bỏ qua
+            if (window.bootstrap && bootstrap.Collapse) {
+                (bootstrap.Collapse.getInstance(collapseEl) ||
+                 new bootstrap.Collapse(collapseEl, { toggle: false })).hide();
+            } else {
+                var t = collapseEl.closest('.stewie-navbar').querySelector('.navbar-toggler');
+                if (t) t.click();
+            }
+        }
+        collapseEl.querySelectorAll('.dropdown-item, .nav-item:not(.stewie-room-hover) > .nav-link')
+            .forEach(function (a) { a.addEventListener('click', closeMenu); });
+    })();
+
+    document.querySelectorAll('.room-subnav').forEach(function (item) {
+        item.addEventListener('click', function (e) {
+            if (window.location.pathname !== '/') return;
+            e.preventDefault();
+            var pill = this.getAttribute('data-pill'); // 'all' | 'my' | 'done'
+            var roomMain = document.querySelector('.nav-link[data-tab="room"]');
+            if (roomMain) roomMain.click();
+            // Gọi trực tiếp showRoomTab (JS thuần, không phụ thuộc Bootstrap)
+            var tabId = pill === 'my' ? 'my-rooms' : (pill === 'done' ? 'done-rooms' : 'all-rooms');
+            if (typeof window.showRoomTab === 'function') window.showRoomTab(tabId);
+            if (document.activeElement) document.activeElement.blur();
+        });
+    });
+
+    // "Thư viện" -> rê chuột hiện 2 tab nhỏ (Câu hỏi của tôi / Đề thi), tương tự Phòng thi.
+    document.querySelectorAll('.lib-subnav').forEach(function (item) {
+        item.addEventListener('click', function (e) {
+            if (window.location.pathname !== '/') return;   // để href điều hướng bình thường
+            e.preventDefault();
+            var sub = this.getAttribute('data-sub');         // 'cauhoi' | 'dethi'
+            var libMain = document.querySelector('.nav-link[data-tab="library"]');
+            if (libMain) libMain.click();                    // mở tab "Thư viện"
+            if (typeof showLibSub === 'function') showLibSub(sub);
+            if (document.activeElement) document.activeElement.blur(); // đóng dropdown hover
+        });
+    });
+
+    // "Lớp học" -> đang ở /lop thì CHỈ đổi tab nhỏ (không tải lại trang), dropdown vẫn mở
+    // cho tới khi lia chuột ra. Ở trang khác: để href điều hướng, /lop?pill=my sẽ tự mở đúng tab.
+    document.querySelectorAll('.lop-subnav').forEach(function (item) {
+        item.addEventListener('click', function (e) {
+            if (!/^\/lop\/?$/.test(window.location.pathname)) return;
+            e.preventDefault();
+            var sub = this.getAttribute('data-sub');          // 'all' | 'my'
+            if (typeof window.showLopTab === 'function')
+                window.showLopTab(sub === 'my' ? 'lop-my-pane' : 'lop-all-pane');
+            history.replaceState(null, '', sub === 'my' ? '/lop?pill=my' : '/lop');
+            if (document.activeElement) document.activeElement.blur();
+        });
+    });
+
+    // "Quản trị" -> đang ở /admin thì CHỈ đổi tab nhỏ (Thống kê / Người dùng / Prompt AI),
+    // không tải lại trang. Ở trang khác: href /admin#... tự mở đúng tab sau khi tải.
+    document.querySelectorAll('.admin-subnav').forEach(function (item) {
+        item.addEventListener('click', function (e) {
+            if (!/^\/admin\/?$/.test(window.location.pathname)) return;
+            e.preventDefault();
+            var btn = document.querySelector('.adm-tab-btn[data-target="' +
+                                             this.getAttribute('data-adm') + '"]');
+            if (btn) btn.click();     // handler của admin.html: bật viền xanh + đổi pane + cập nhật #hash
+            if (document.activeElement) document.activeElement.blur();
+        });
+    });
+});
+</script>

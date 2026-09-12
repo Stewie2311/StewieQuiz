@@ -1,0 +1,956 @@
+{#
+  library-section.html — TAB "THƯ VIỆN" trên trang chủ (include vào index.html).
+
+  Ba mục con:
+    Câu hỏi của tôi — các bộ câu hỏi AI đã sinh (de_thi có loai='cau_hoi').
+    Đề thi của tôi  — đề đã đóng gói, mở phòng thi được (loai='de_thi').
+    Ngân hàng chung — kho câu hỏi của cả trường, nạp bằng AJAX từ /ngan_hang?partial=1.
+
+  Phân biệt "bộ câu hỏi" và "đề thi" là điều dễ nhầm nhất ở đây: cả hai đều nằm
+  chung bảng de_thi, chỉ khác cột `loai`. Bộ câu hỏi là nguyên liệu thô, chưa
+  mở phòng thi được; phải qua wizard tạo đề mới thành đề thi thật.
+#}
+<div class="tab-pane {% if active_tab == 'library' %}active{% endif %}" id="library-tab">
+    <div class="library-section">
+
+        <!-- ===== Header: hàng tab (trái) + Ô CHỨC NĂNG đóng khung (phải) ===== -->
+        <div class="lib-header">
+            <div class="lib-subtab">
+                <button type="button" class="lib-subtab-btn active" data-sub="cauhoi">
+                    <i class="fas fa-layer-group"></i> Câu hỏi của tôi
+                </button>
+                <button type="button" class="lib-subtab-btn" data-sub="tailieu">
+                    <i class="fas fa-file-pdf"></i> File PDF
+                </button>
+                <button type="button" class="lib-subtab-btn" data-sub="nganhang">
+                    <i class="fas fa-share-alt"></i> Ngân hàng câu hỏi
+                </button>
+                <button type="button" class="lib-subtab-btn" data-sub="dethi">
+                    <i class="fas fa-file-lines"></i> Đề thi
+                </button>
+            </div>
+
+            <!-- Ô chức năng (sát phải) — đổi nội dung theo tab đang mở -->
+            <div class="lib-toolbar" id="libToolbar">
+                <!-- File PDF -->
+                <div class="lib-tools active" data-for="tailieu">
+                    <div class="nh-search">
+                        <input type="checkbox" id="tlSearchChk" class="nh-search-chk">
+                        <label for="tlSearchChk" class="nh-search-icon" title="Tìm tên tài liệu"><i class="fas fa-search"></i></label>
+                        <input type="text" id="tlSearch" class="nh-search-input" placeholder="Nhập tên tài liệu..." onkeyup="filterTaiLieu()">
+                    </div>
+                </div>
+                <!-- Câu hỏi của tôi -->
+                <div class="lib-tools" data-for="cauhoi">
+                    <div class="nh-search">
+                        <input type="checkbox" id="libSearchChk" class="nh-search-chk">
+                        <label for="libSearchChk" class="nh-search-icon" title="Tìm tên môn"><i class="fas fa-search"></i></label>
+                        <input type="text" id="libSearch" class="nh-search-input" placeholder="Nhập tên môn..." onkeyup="filterLibrary()">
+                    </div>
+                    <button type="button" class="btn lib-btn-new" title="Tạo câu hỏi mới"
+                            onclick="document.querySelector('.nav-link[data-tab=exam]').click()">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <!-- Ngân hàng câu hỏi -->
+                <div class="lib-tools" data-for="nganhang">
+                    <div class="nh-search">
+                        <input type="checkbox" id="nhMonSearchChk" class="nh-search-chk">
+                        <label for="nhMonSearchChk" class="nh-search-icon" title="Tìm tên môn"><i class="fas fa-search"></i></label>
+                        <input type="text" id="nhMonSearch" class="nh-search-input" placeholder="Nhập tên môn..." onkeyup="filterNhMon()">
+                    </div>
+                </div>
+                <!-- Đề thi -->
+                <div class="lib-tools" data-for="dethi">
+                    <div class="nh-search">
+                        <input type="checkbox" id="deSearchChk" class="nh-search-chk">
+                        <label for="deSearchChk" class="nh-search-icon" title="Tìm tên đề hoặc môn"><i class="fas fa-search"></i></label>
+                        <input type="text" id="deSearch" class="nh-search-input" placeholder="Nhập tên đề hoặc môn..." onkeyup="filterDeThi()">
+                    </div>
+                    <a href="{{ url_for('exam.tao_de_thi') }}" class="btn lib-btn-new" title="Tạo đề thi mới">
+                        <i class="fas fa-plus"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ THƯ VIỆN CON 1: CÂU HỎI (panel thống kê + bảng auto-fit) ============ -->
+        <div class="lib-sub-pane active" id="lib-cauhoi" data-paginate="libTableBody" data-per-page="20">
+            {% set tong_de  = exams|sum(attribute='dk_de') %}
+            {% set tong_tb  = exams|sum(attribute='dk_tb') %}
+            {% set tong_kho = exams|sum(attribute='dk_kho') %}
+            {% set total_cau = exams|sum(attribute='tong_so_cau') %}
+            {% set dk_max = [tong_de, tong_tb, tong_kho, 1]|max %}
+            {# ----- Tham số biểu đồ TRÒN (donut): chu vi C cho r=42 ----- #}
+            {% set total_dk = tong_de + tong_tb + tong_kho %}
+            {% set C = 264 %}
+            {% set de_len  = (tong_de  * C / total_dk) if total_dk else 0 %}
+            {% set tb_len  = (tong_tb  * C / total_dk) if total_dk else 0 %}
+            {% set kho_len = (tong_kho * C / total_dk) if total_dk else 0 %}
+            {% set tb_rot  = (-90 + tong_de * 360 / total_dk) if total_dk else -90 %}
+            {% set kho_rot = (-90 + (tong_de + tong_tb) * 360 / total_dk) if total_dk else -90 %}
+            <div class="lib-split">
+                <!-- ===== Panel thống kê (bên trái) — liên quan tới các cột trong bảng ===== -->
+                <aside class="lib-stats animate">
+                    <div class="lst-nums">
+                        <div class="lst-num"><b class="count-up" data-to="{{ exams|length }}">{{ exams|length }}</b><span>Môn / bộ</span></div>
+                        <div class="lst-num"><b class="count-up" data-to="{{ total_cau }}">{{ total_cau }}</b><span>Tổng câu</span></div>
+                    </div>
+
+                    {# ===== Biểu đồ TRÒN (donut) phân bố độ khó — vẽ bằng SVG, chạy hiệu ứng ===== #}
+                    <div class="lst-donut-wrap">
+                        <svg class="lst-donut" viewBox="0 0 100 100">
+                            <circle class="lst-donut-track" cx="50" cy="50" r="42"></circle>
+                            {% if total_dk %}
+                            <circle class="lst-seg seg-de" cx="50" cy="50" r="42"
+                                    style="--len: {{ de_len|round(2) }}; stroke-dasharray: {{ de_len|round(2) }} 999; transform: rotate(-90deg); animation-delay: .05s"></circle>
+                            <circle class="lst-seg seg-tb" cx="50" cy="50" r="42"
+                                    style="--len: {{ tb_len|round(2) }}; stroke-dasharray: {{ tb_len|round(2) }} 999; transform: rotate({{ tb_rot|round(2) }}deg); animation-delay: .25s"></circle>
+                            <circle class="lst-seg seg-kho" cx="50" cy="50" r="42"
+                                    style="--len: {{ kho_len|round(2) }}; stroke-dasharray: {{ kho_len|round(2) }} 999; transform: rotate({{ kho_rot|round(2) }}deg); animation-delay: .45s"></circle>
+                            {% endif %}
+                            <text class="lst-donut-num count-up" data-to="{{ total_dk }}" x="50" y="49">{{ total_dk }}</text>
+                            <text class="lst-donut-cap" x="50" y="63">câu hỏi</text>
+                        </svg>
+                    </div>
+
+                    <div class="lst-sub">Phân bố độ khó</div>
+                    <div class="lst-bars">
+                        <div class="lst-bar">
+                            <span class="lst-bar-name dk-de-t">Dễ</span>
+                            <span class="lst-track"><span class="lst-fill dk-de" style="--w: {{ (tong_de * 100 / dk_max)|int }}%; animation-delay:.1s"></span></span>
+                            <span class="lst-bar-val">{{ tong_de }}</span>
+                        </div>
+                        <div class="lst-bar">
+                            <span class="lst-bar-name dk-tb-t">TB</span>
+                            <span class="lst-track"><span class="lst-fill dk-tb" style="--w: {{ (tong_tb * 100 / dk_max)|int }}%; animation-delay:.25s"></span></span>
+                            <span class="lst-bar-val">{{ tong_tb }}</span>
+                        </div>
+                        <div class="lst-bar">
+                            <span class="lst-bar-name dk-kho-t">Khó</span>
+                            <span class="lst-track"><span class="lst-fill dk-kho" style="--w: {{ (tong_kho * 100 / dk_max)|int }}%; animation-delay:.4s"></span></span>
+                            <span class="lst-bar-val">{{ tong_kho }}</span>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- ===== Bảng (bên phải) — AUTO-FIT trải hết bề ngang còn lại ===== -->
+                <div class="table-wrapper lib-table-wrap" style="overflow-x:auto;">
+                    <table class="data-table lib-table-modern lib-table-fit">
+                        <thead>
+                            <tr>
+                                <th style="width: 40%;"><i class="fas fa-book"></i> Môn học</th>
+                                <th style="width: 14%;" class="text-center"><i class="fas fa-hashtag"></i> Số câu</th>
+                                <th style="width: 28%;" class="text-center"><i class="fas fa-signal"></i> Độ khó</th>
+                                <th style="width: 18%;" class="text-center"><i class="fas fa-calendar"></i> Ngày tạo</th>
+                                <th style="width: 1%;" class="text-center"><i class="fas fa-gear"></i> Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="libTableBody">
+                            {% for ex in exams %}
+                            <tr data-mon="{{ ex.ten_mon }}">
+                                <td class="col-primary">{{ ex.ten_mon }}</td>
+                                <td class="text-center"><span class="badge-count">{{ ex.tong_so_cau }}</span></td>
+                                <td class="text-center">
+                                    <span class="dk-mini">
+                                        <span class="dk-chip dk-de" title="Dễ">{{ ex.dk_de }}</span>
+                                        <span class="dk-chip dk-tb" title="Trung bình">{{ ex.dk_tb }}</span>
+                                        <span class="dk-chip dk-kho" title="Khó">{{ ex.dk_kho }}</span>
+                                    </span>
+                                </td>
+                                <td class="text-center"><span class="col-muted">{% if ex.ngay_tao %}{{ ex.ngay_tao.strftime('%d/%m/%Y') }}{% endif %}</span></td>
+                                <td>
+                                    <div class="tbl-actions center">
+                                        <a href="/view_exam/{{ ex.id }}" class="btn-act btn-view icon-only" data-tip="Xem câu hỏi" title="Xem toàn bộ câu hỏi của bộ này" aria-label="Xem">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="/edit_exam/{{ ex.id }}" class="btn-act btn-edit icon-only" data-tip="Sửa" title="Sửa" aria-label="Sửa">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        {# Xóa = POST + CSRF (link GET có thể bị kích hoạt từ trang khác) #}
+                                        <form method="POST" action="/delete_exam/{{ ex.id }}" class="d-inline"
+                                              onsubmit="return confirm('Bạn có chắc chắn muốn xóa bộ câu hỏi này không?')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="next" value="/?tab=library&sub=cauhoi">
+                                            <button type="submit" class="btn-act btn-del icon-only" data-tip="Xóa câu hỏi" title="Xóa câu hỏi" aria-label="Xóa">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                        <button class="btn-act btn-bank icon-only" data-tip="Thêm vào Ngân hàng" title="Thêm toàn bộ câu hỏi vào Ngân hàng câu hỏi" aria-label="Thêm vào Ngân hàng câu hỏi" onclick="themDeVaoNganHang({{ ex.id }}, this)">
+                                            <i class="fas fa-share-nodes"></i>
+                                        </button>
+                                        <a href="/thu_vien/de/{{ ex.id }}/excel" class="btn-act btn-excel icon-only" data-tip="Tải Excel" title="Tải Excel câu hỏi của môn này" aria-label="Tải Excel">
+                                            <i class="fas fa-file-excel"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+
+                            {% if not exams %}
+                            <tr>
+                                <td colspan="5" style="text-align:center; padding: 60px 20px; color:var(--text-muted);">
+                                    <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5; display:block;"></i>
+                                    <h5 style="color: var(--text-secondary); margin-bottom: 5px;">Chưa có câu hỏi</h5>
+                                    <p style="font-size: 0.9rem;">Bạn chưa tạo câu hỏi nào. Hãy sang tab "Tạo câu hỏi" để bắt đầu!</p>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ THƯ VIỆN CON 2: ĐỀ THI ============ -->
+        <div class="lib-sub-pane" id="lib-dethi" data-paginate="deTableBody" data-per-page="20">
+            <div class="table-wrapper" style="overflow-x:auto;">
+                <table class="data-table de-table" style="min-width:1180px;">
+                        <thead>
+                            <tr>
+                                <th class="de-name"><i class="fas fa-file-lines"></i> Tên đề thi</th>
+                                <th class="text-center"><i class="fas fa-barcode"></i> Mã đề</th>
+                                <th><i class="fas fa-book"></i> Môn học</th>
+                                <th><i class="fas fa-id-card"></i> Mã học phần</th>
+                                <th><i class="fas fa-graduation-cap"></i> Hình thức</th>
+                                <th class="text-center"><i class="fas fa-clock"></i> Học kỳ</th>
+                                <th class="text-center"><i class="fas fa-calendar"></i> Năm học</th>
+                                <th><i class="fas fa-database"></i> Nguồn</th>
+                                <th class="text-center"><i class="fas fa-hashtag"></i> Số câu</th>
+                                <th class="text-center"><i class="fas fa-calendar"></i> Ngày tạo</th>
+                                <th class="text-center"><i class="fas fa-gear"></i> Thao tác</th>
+                            </tr>
+                        </thead>
+                    <tbody id="deTableBody">
+                        {% for de in de_thi_list %}
+                        {% set mt = de.meta %}
+                        <tr data-search="{{ (de.ten_de_thi ~ ' ' ~ de.ten_mon)|lower }}">
+                            <td class="de-name">
+                                <i class="fas fa-file-lines" style="color:var(--primary); margin-right:6px;"></i>
+                                {{ mt.ten or de.ten_de_thi }}
+                            </td>
+                            <td class="text-center"><span class="badge">{{ mt.ma_de }}</span></td>
+                            <td><span class="badge">{{ de.ten_mon }}</span></td>
+                            <td>{% if mt.ma_hp %}{{ mt.ma_hp }}{% else %}<span style="color:var(--text-muted);">—</span>{% endif %}</td>
+                            <td>{% if mt.hinh_thuc %}{{ mt.hinh_thuc }}{% else %}<span style="color:var(--text-muted);">—</span>{% endif %}</td>
+                            <td class="text-center">{% if mt.hoc_ky %}{{ mt.hoc_ky }}{% else %}<span style="color:var(--text-muted);">—</span>{% endif %}</td>
+                            <td class="text-center">{% if mt.nam_hoc %}{{ mt.nam_hoc }}{% else %}<span style="color:var(--text-muted);">—</span>{% endif %}</td>
+                            <td>
+                                {% if de.nguon == 'ca_nhan' %}Câu hỏi của tôi
+                                {% elif de.nguon == 'ngan_hang' %}Ngân hàng
+                                {% else %}<span style="color:var(--text-muted);">Không rõ</span>{% endif %}
+                            </td>
+                            <td class="text-center"><span class="badge-count">{{ de.tong_so_cau }}</span></td>
+                            <td class="text-center">
+                                {% if de.ngay_tao %}{{ de.ngay_tao.strftime('%d/%m/%Y') }}{% endif %}
+                            </td>
+                            <td>
+                                <div class="tbl-actions center">
+                                    <a href="/tao_phong/{{ de.id }}" class="btn-act btn-room icon-only" data-tip="Tạo phòng thi" title="Tạo phòng thi từ đề này" aria-label="Tạo phòng thi">
+                                        <i class="fas fa-door-open"></i>
+                                    </a>
+                                    <a href="/edit_exam/{{ de.id }}" class="btn-act btn-edit icon-only" data-tip="Sửa đề" title="Sửa" aria-label="Sửa">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" action="/delete_exam/{{ de.id }}" class="d-inline"
+                                          onsubmit="return confirm('Bạn có chắc chắn muốn xóa đề thi này không?')">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="next" value="/?tab=library&sub=dethi">
+                                        <button type="submit" class="btn-act btn-del icon-only" data-tip="Xóa đề thi" title="Xóa đề thi" aria-label="Xóa">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                    <a href="/thu_vien/de/{{ de.id }}/excel" class="btn-act btn-excel icon-only" data-tip="Tải Excel" title="Tải Excel câu hỏi của đề này" aria-label="Tải Excel">
+                                        <i class="fas fa-file-excel"></i>
+                                    </a>
+                                    <a href="/export_exam/{{ de.id }}?fmt=pdf" target="_blank" rel="noopener" class="btn-act btn-pdf icon-only" data-tip="Xuất / In PDF" title="Xuất / In PDF" aria-label="Xuất PDF">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                    <a href="/export_exam/{{ de.id }}?fmt=word" class="btn-act btn-word icon-only" data-tip="Tải file Word" title="Tải file Word" aria-label="Tải Word">
+                                        <i class="fas fa-file-word"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+
+                        {% if not de_thi_list %}
+                        <tr>
+                            <td colspan="11" style="text-align:center; padding: 60px 20px; color:var(--text-muted);">
+                                <i class="fas fa-file-circle-plus" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5; display:block;"></i>
+                                <h5 style="color: var(--text-secondary); margin-bottom: 5px;">Chưa có đề thi</h5>
+                                <p style="font-size: 0.9rem;">Bạn chưa tạo đề thi nào. Bấm "Tạo đề thi mới" để đóng gói câu hỏi thành đề.</p>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ============ THƯ VIỆN CON 4: TÀI LIỆU PDF (lưu trên ổ đĩa, không vào DB) ============ -->
+        <div class="lib-sub-pane" id="lib-tailieu" data-paginate="tlTableBody" data-per-page="20">
+            {% set tl_tong_byte = tai_lieu|sum(attribute='kich_thuoc_byte') if tai_lieu else 0 %}
+            {% set tl_top = (tai_lieu|sort(attribute='kich_thuoc_byte', reverse=true))[:3] %}
+            {% set tl_max = (tl_top[0].kich_thuoc_byte if tl_top else 1) or 1 %}
+            <div class="lib-split">
+                <!-- ===== Panel thống kê tài liệu (trái) ===== -->
+                <aside class="lib-stats animate">
+                    <div class="lst-title"><i class="fas fa-folder-open"></i> Thống kê tài liệu</div>
+                    <div class="lst-nums">
+                        <div class="lst-num"><b class="count-up" data-to="{{ tai_lieu|length if tai_lieu else 0 }}">{{ tai_lieu|length if tai_lieu else 0 }}</b><span>Tài liệu</span></div>
+                        <div class="lst-num">
+                            <b>{% if tl_tong_byte >= 1048576 %}{{ (tl_tong_byte / 1048576)|round(1) }}{% else %}{{ (tl_tong_byte / 1024)|round(0)|int }}{% endif %}</b>
+                            <span>{% if tl_tong_byte >= 1048576 %}MB tổng{% else %}KB tổng{% endif %}</span>
+                        </div>
+                    </div>
+                    <div class="lst-sub">Tài liệu lớn nhất</div>
+                    {% if tl_top %}
+                    <div class="lst-bars">
+                        {% for tl in tl_top %}
+                        <div class="lst-bar">
+                            <span class="lst-bar-name" style="width:auto; max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#475569;" title="{{ tl.ten }}">{{ tl.ten }}</span>
+                            <span class="lst-track"><span class="lst-fill dk-neutral" style="--w: {{ (tl.kich_thuoc_byte * 100 / tl_max)|int }}%; animation-delay:{{ '%.2f'|format(0.1 + loop.index0 * 0.15) }}s"></span></span>
+                            <span class="lst-bar-val" style="width:auto;">{{ tl.kich_thuoc_str }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p style="font-size:0.82rem; color:var(--text-muted); margin:0;">Chưa có tài liệu nào.</p>
+                    {% endif %}
+                </aside>
+
+                <!-- ===== Bảng tài liệu (phải) — auto-fit ===== -->
+                <div class="table-wrapper lib-table-wrap" style="overflow-x:auto;">
+                    <table class="data-table lib-table-modern lib-table-fit">
+                    <thead>
+                        <tr>
+                            <th style="width:50%;"><i class="fas fa-file-pdf"></i> Tên tài liệu</th>
+                            <th style="width:16%;" class="text-center"><i class="fas fa-weight-scale"></i> Kích thước</th>
+                            <th style="width:20%;" class="text-center"><i class="fas fa-calendar"></i> Ngày tải lên</th>
+                            <th style="width:14%;" class="text-center"><i class="fas fa-gear"></i> Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tlTableBody">
+                        {% for tl in tai_lieu %}
+                        <tr data-ten="{{ tl.ten }}">
+                            <td class="col-primary"><i class="fas fa-file-pdf" style="color:#dc2626; margin-right:8px;"></i>{{ tl.ten }}</td>
+                            <td class="text-center"><span class="col-muted">{{ tl.kich_thuoc_str }}</span></td>
+                            <td class="text-center"><span class="col-muted">{{ tl.ngay.strftime('%H:%M %d/%m/%Y') }}</span></td>
+                            <td>
+                                <div class="tbl-actions center">
+                                    {# Dùng lại file này để tạo câu hỏi — KHÔNG phải tải lên lại.
+                                       Trang Tạo câu hỏi tự nạp sẵn danh sách chương từ cache. #}
+                                    <a href="/?tab=exam&dung_lai={{ tl.fname | urlencode }}"
+                                       class="btn-act btn-bank icon-only"
+                                       data-tip="Tạo câu hỏi từ file này" title="Dùng lại file này để tạo câu hỏi (không cần tải lên lại)" aria-label="Tạo câu hỏi">
+                                        <i class="fas fa-rotate-right"></i>
+                                    </a>
+                                    <a href="/tai_lieu/{{ tl.fname }}" class="btn-act btn-excel icon-only" data-tip="Tải xuống" title="Tải file PDF về máy" aria-label="Tải xuống">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                    <button type="button" class="btn-act btn-del icon-only" data-tip="Xóa tài liệu" title="Xóa tài liệu" aria-label="Xóa" onclick="xoaTaiLieu('{{ tl.fname }}', this)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+
+                        {% if not tai_lieu %}
+                        <tr>
+                            <td colspan="4" style="text-align:center; padding:60px 20px; color:var(--text-muted);">
+                                <i class="fas fa-file-circle-plus" style="font-size:3rem; margin-bottom:15px; opacity:0.5; display:block;"></i>
+                                <h5 style="color:var(--text-secondary); margin-bottom:5px;">Chưa có tài liệu</h5>
+                                <p style="font-size:0.9rem;">Mỗi file PDF bạn tải lên để tạo câu hỏi sẽ tự động được lưu lại ở đây.</p>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ THƯ VIỆN CON 3: NGÂN HÀNG CÂU HỎI (nạp AJAX, không tải lại trang) ============ -->
+        <div class="lib-sub-pane" id="lib-nganhang">
+            <div id="nhPaneBody">
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-spinner fa-spin fs-3 mb-2 d-block"></i> Đang tải Ngân hàng câu hỏi...
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<style>
+/* Khối thư viện trải hết bề rộng nội dung; riêng 2 thư viện con Câu hỏi/Ngân hàng
+   giữ bề ngang gọn như cũ, còn Đề thi (nhiều cột) được trải full để hiển thị đủ. */
+.library-section { width: 100%; }
+.lib-header, #lib-cauhoi, #lib-nganhang, #lib-tailieu { max-width: var(--content-narrow); margin: 0 auto; }
+/* Bảng Đề thi: nhiều cột, các cột không xuống dòng, tự cuộn ngang nếu tràn. */
+.de-table th, .de-table td { white-space: nowrap; }
+.de-table th.de-name, .de-table td.de-name { white-space: normal; min-width: 240px; }
+
+/* ===================================================================
+   BẢNG 4 THƯ VIỆN CON — 2 KỸ THUẬT: CUỘN NGANG + KHÓA CỐ ĐỊNH CỘT ĐẦU
+   • Giữ NGUYÊN cỡ chữ/bố cục bình thường (không thu nhỏ).
+   • Cho bảng auto-fit một bề rộng TỐI THIỂU -> màn hẹp thì CUỘN NGANG
+     (Horizontal Scroll) thay vì bóp méo cột.
+   • Cột ĐẦU (tên môn / tên đề / tên tài liệu) LUÔN DÍNH TRÁI (Sticky Column)
+     khi vuốt ngang -> luôn biết đang xem dòng của mục nào.
+   =================================================================== */
+/* (Đề thi đã có min-width:1180px riêng; đây cho các bảng auto-fit còn lại.) */
+.library-section .lib-table-fit { min-width: 620px; }
+
+/* --- Sticky cột đầu: áp cho MỌI bảng trong .table-wrapper của Thư viện --- */
+.library-section .table-wrapper > table th:first-child,
+.library-section .table-wrapper > table td:first-child {
+    position: sticky; left: 0; z-index: 1;
+    background: #ffffff;
+    box-shadow: 1px 0 0 #e5e7eb;   /* vạch mảnh ngăn cách với phần cuộn phía sau */
+}
+/* Ô tiêu đề cột đầu: nổi trên cùng + nền header */
+.library-section .table-wrapper > table thead th:first-child {
+    z-index: 3; background: #f1f5f9;
+}
+/* Rê chuột 1 hàng -> ô dính đổi nền cho khớp phần còn lại của hàng */
+.library-section .table-wrapper > table tbody tr:hover td:first-child { background: #f8fafc; }
+
+/* ⚠️ ĐIỆN THOẠI: .lib-split xếp DỌC (stats trên, bảng dưới). Mặc định
+   align-items:flex-start làm KHUNG bảng CO bằng đúng min-width của bảng
+   -> khung phình ra tràn cả trang, KHÔNG cuộn ngang trong khung được
+   (Câu hỏi/File PDF/Ngân hàng dính lỗi; Đề thi thoát vì không nằm trong .lib-split).
+   FIX: ép khung bảng RỘNG HẾT cột (100%) để phần dư của bảng CUỘN NGANG bên trong. */
+@media (max-width: 900px) {
+    .library-section .lib-split { align-items: stretch; }
+    .library-section .lib-split .lib-table-wrap { width: 100%; min-width: 0; }
+}
+/* Cột "Mã đề" (A01, A02…): thu về đúng bề rộng nội dung, không chiếm chỗ dư -> gọn như các cột khác */
+.de-table th:nth-child(2), .de-table td:nth-child(2) { width: 1%; }
+/* Mã đề là .badge -> typography-unify ép 0.9rem; đưa về 0.8rem cho BẰNG cỡ chữ các cột khác */
+.de-table td:nth-child(2) .badge { font-size: 0.8rem !important; }
+
+/* Nút Tải Excel ở bảng Đề thi: bảng này KHÔNG mang class .lib-table-modern nên
+   không ăn được rule màu ở ngan_hang.css (.lib-table-modern .btn-act.btn-excel)
+   -> nút rơi về màu mặc định. Đặt lại đúng tông XANH LÁ như bảng Ngân hàng câu hỏi. */
+.de-table .btn-act.btn-excel {
+    color: #16a34a !important; background: #ecfdf5 !important;
+    border-color: rgba(22,163,74,0.25) !important;
+}
+.de-table .btn-act.btn-excel:hover {
+    color: #fff !important; background: #16a34a !important;
+    border-color: #16a34a !important;
+}
+
+/* ===== ĐỒNG BỘ TOÀN BỘ BẢNG THƯ VIỆN: cỡ chữ, màu, padding, border ===== */
+/* Bảng Đề thi (de-table) cũng dùng chung các rule này */
+.data-table.de-table { border-collapse: separate; border-spacing: 0; }
+.library-section .data-table th,
+.library-section .data-table td { font-size: 0.8rem !important; }
+.library-section .data-table tbody td { padding: 5px 7px !important; color: #3b3e44 !important; }
+.library-section .data-table .col-muted { color: #3b3e44 !important; }
+.library-section .data-table thead th i { margin-right: 4px; opacity: 0.6; }
+.library-section .data-table thead th { padding: 5px 7px !important; background: #f1f5f9 !important; color: #555b65 !important; font-weight: 600 !important; }
+.library-section .data-table tbody tr { transition: background .15s ease; }
+.library-section .data-table tbody tr:hover { background: #f8fafc; }
+/* Cột tên đề (bảng Đề thi) */
+.library-section .data-table td.de-name { font-weight: 600 !important; color: #3b3e44 !important; min-width: 130px !important; }
+/* "Số câu" pill */
+.library-section .data-table .badge-count {
+    display: inline-block !important; min-width: 0 !important;
+    padding: 2px 10px !important; border: none !important;
+    background: #eff6ff !important; color: #1d4ed8 !important;
+    border-radius: 999px !important; font-weight: 600 !important; font-size: 0.8rem !important;
+}
+/* Nút thao tác icon trong bảng Đề thi */
+.library-section .data-table .btn-act.icon-only { width: 30px !important; height: 30px !important; font-size: 0.8rem !important; }
+
+/* ===== Thanh tìm kiếm trong toolbar: ô nhập chạy IN-FLOW, toolbar tự giãn mượt ===== */
+.lib-toolbar {
+    transition: min-width .25s ease, width .25s ease;
+}
+.lib-toolbar .nh-search { position: static; display: inline-flex; align-items: center; }
+.lib-toolbar .nh-search-input {
+    position: static;
+    width: 0; min-width: 0; height: 38px; padding: 0;
+    border: 1px solid transparent; border-radius: 10px; background: #fff; color: #0f172a;
+    opacity: 0; pointer-events: none;
+    overflow: hidden; white-space: nowrap;
+    transition: width .28s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity .22s ease,
+                padding .22s ease,
+                border-color .22s ease;
+}
+.lib-toolbar .nh-search-chk:checked ~ .nh-search-input {
+    width: 200px; opacity: 1; pointer-events: auto;
+    padding: 0 12px;
+    border-color: var(--border-strong);
+}
+/* Icon kính lúp trong toolbar: giữ nguyên vị trí, không tuyệt đối */
+.lib-toolbar .nh-search-icon {
+    position: static; z-index: auto;
+    width: 38px; height: 38px; flex: 0 0 auto;
+}
+
+/* ===== Bo tròn viền bảng (vừa phải) ===== */
+.library-section .table-wrapper { border-radius: 10px !important; overflow: hidden; }
+.library-section .data-table { border-radius: 10px !important; }
+
+/* ===== Đường kẻ ô xám đậm + màu chữ đồng bộ ===== */
+.library-section .data-table th,
+.library-section .data-table tbody td { border-bottom: 1px solid #d1d5db !important; color: #3b3e44; }
+.library-section .data-table tbody td { color: #3b3e44; }
+/* Nền header: xám trung tính */
+.library-section .data-table thead th { background: #f1f5f9; color: #555b65; }
+
+/* Nút thao tác: ẩn mặc định, hiện khi hover (đồng bộ toàn Thư viện) */
+.text-center { text-align: center; }
+
+/* Header: hàng tab (trái) + ô chức năng (phải), gạch chân chung */
+.lib-header {
+    display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 12px;
+}
+/* Tab con: Môn / Đề thi — kiểu pill giống bên Quản lý phòng (.custom-pills).
+   LUÔN nằm trên 1 HÀNG (không xuống dòng); nếu màn quá hẹp thì cuộn ngang mượt
+   thay vì vỡ thành 2 hàng. Ẩn thanh cuộn cho gọn. */
+.lib-subtab {
+    display: flex; gap: 10px; flex: 1 1 auto; min-width: 0;
+    flex-wrap: nowrap; overflow-x: auto;
+    scrollbar-width: none;                 /* Firefox: ẩn thanh cuộn */
+    -webkit-overflow-scrolling: touch;
+}
+.lib-subtab::-webkit-scrollbar { display: none; }   /* Chrome/Safari: ẩn thanh cuộn */
+
+/* Ô CHỨC NĂNG — đóng khung, dồn sát phải, đổi nội dung theo tab đang mở */
+.lib-toolbar {
+    margin-left: auto; flex-shrink: 0;
+    display: flex; align-items: center;
+    border: 1px solid var(--border); border-radius: 12px;
+    background: #f8fafc; padding: 6px 10px; min-height: 54px;
+}
+.lib-tools { display: none; align-items: center; gap: 10px; }
+.lib-tools.active { display: flex; }
+/* Chip đếm số lượng — gọn, cùng tông xanh chủ đạo */
+.lib-count {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--primary-softer); border: 1px solid rgba(37,99,235,0.25);
+    color: var(--primary); font-weight: 800; font-size: 0.9rem;
+    border-radius: 8px; padding: 8px 12px; white-space: nowrap;
+}
+/* ===== ĐIỆN THOẠI (≤768px) ===== */
+@media (max-width: 768px) {
+    /* Ô chức năng "nền trắng" (tìm kiếm + thêm) — DÙNG CHUNG cho CẢ 4 tab
+       (Câu hỏi / File PDF / Ngân hàng / Đề thi, cùng 1 .lib-toolbar):
+       THU GỌN — ôm sát nội dung, dồn sát phải, thấp lại (bỏ min-height + full-width). */
+    .lib-toolbar {
+        margin-left: auto; width: auto;
+        padding: 4px 6px; min-height: 0; gap: 6px;
+    }
+    .lib-tools { gap: 6px; }
+    .lib-btn-new { width: 34px; height: 34px; font-size: 0.9rem; }
+
+    /* 4 tab con gọn lại để cùng nằm 1 hàng */
+    .lib-subtab { gap: 6px; }
+    .lib-subtab-btn { padding: 8px 12px; font-size: 0.84rem; gap: 6px; }
+    /* (Bảng GIỮ NGUYÊN cỡ chữ/bố cục bình thường — cuộn ngang + dính cột đầu, xem bên dưới.) */
+}
+@media (max-width: 480px) {
+    .lib-subtab-btn { padding: 7px 10px; font-size: 0.8rem; }
+}
+.lib-subtab-btn { display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 20px; border: 1px solid var(--border); background: var(--surface);
+    font-weight: 600; font-size: 0.9rem; color: var(--text-muted); cursor: pointer;
+    text-decoration: none; transition: all 0.3s var(--ease);
+    white-space: nowrap; flex-shrink: 0; }   /* giữ nguyên trên 1 hàng, không co chữ */
+.lib-subtab-btn:hover { color: var(--primary-dark); background: var(--primary-softer); }
+.lib-subtab-btn.active { background: var(--primary-soft); color: var(--primary-dark);
+    border-color: rgba(37,99,235,0.3); }
+.lib-subtab-count { background: var(--primary-soft); color: var(--primary-dark);
+    border-radius: 20px; padding: 1px 9px; font-size: 0.75rem; font-weight: 800; }
+.lib-subtab-btn:hover .lib-subtab-count,
+.lib-subtab-btn.active .lib-subtab-count { background: var(--primary); color: #fff; }
+
+.lib-sub-pane { display: none; animation: tabSwitch 0.3s var(--ease); }
+.lib-sub-pane.active { display: block; }
+
+/* Khung form công cụ — xếp gọn 1 hàng giống form bên Thư viện chung */
+.lib-filter-bar {
+    background: #f8fafc; border: 1px solid #f1f5f9;
+    border-radius: 16px; padding: 20px; margin-bottom: 16px;
+}
+/* Ô "Số môn" hiển thị như 1 field cho đều hàng với ô tìm kiếm */
+.lib-so-mon {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--primary-softer); border-color: rgba(37,99,235,0.25);
+    color: var(--primary); font-weight: 800;
+}
+/* Nút Tạo mới — cùng chiều cao field, tông xanh chủ đạo */
+.lib-btn-new {
+    background: var(--grad-primary); color: #fff; font-weight: 700;
+    width: 42px; height: 42px; padding: 0; border-radius: 10px; border: none;
+    box-shadow: var(--shadow-primary); transition: all 0.2s var(--ease);
+    display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+    font-size: 1rem;
+}
+.lib-btn-new:hover { transform: translateY(-2px); color: #fff; box-shadow: var(--shadow-lg); }
+/* Nút Tải Excel — tông xanh lá, cùng chiều cao field */
+.lib-btn-excel { background: linear-gradient(135deg,#16a34a,#22c55e); color: #fff; font-weight: 700;
+    padding: 11px 14px; border-radius: 10px; border: none; box-shadow: 0 6px 16px rgba(22,163,74,0.25);
+    transition: all 0.2s var(--ease); display: inline-flex; align-items: center; text-decoration: none; white-space: nowrap; }
+.lib-btn-excel:hover { transform: translateY(-2px); color: #fff; box-shadow: 0 10px 22px rgba(22,163,74,0.32); }
+/* Nút thao tác dùng chuẩn chung trong main.css (.tbl-actions / .btn-act) */
+/* Mẫu bảng phẳng (chữ xám đậm, header đậm, bỏ badge nền xanh) nay ở GLOBAL .data-table trong main.css */
+
+
+/* ===== Cột thao tác: nút chỉ-icon, LUÔN hiển thị để dễ thấy & bấm ===== */
+/* Icon vuông gọn, đều nhau — bỏ chữ cho đỡ lặp, nhận biết qua tooltip */
+.library-section .tbl-actions .btn-act.icon-only {
+    width: 34px; height: 34px; padding: 0; justify-content: center; font-size: 0.9rem;
+}
+/* Ẩn mặc định (giữ chỗ để không xô layout), hiện mượt khi rê chuột/focus vào dòng */
+.library-section .data-table tbody .tbl-actions {
+    opacity: 0; transition: opacity 0.18s var(--ease);
+}
+.library-section .data-table tbody tr:hover .tbl-actions,
+.library-section .data-table tbody tr:focus-within .tbl-actions {
+    opacity: 1;
+}
+/* Thiết bị cảm ứng / màn nhỏ không có hover -> luôn hiện để bấm được */
+@media (hover: none), (max-width: 768px) {
+    .library-section .data-table tbody .tbl-actions { opacity: 1; }
+}
+
+/* ===================================================================
+   Bảng hiện đại (.lib-table-modern) + Panel thống kê (.lib-stats / .lst-*)
+   + chip độ khó (.dk-*) ĐÃ CHUYỂN sang static/css/ngan_hang.css (global)
+   để dùng chung cho CẢ trang /ngan_hang độc lập lẫn các pane Thư viện.
+   =================================================================== */
+</style>
+
+<script>
+// Chuyển giữa 3 thư viện con (Câu hỏi / Ngân hàng / Đề thi) — đều in-page, không tải lại
+function showLibSub(sub) {
+    document.querySelectorAll('.lib-subtab-btn').forEach(function(b) {
+        b.classList.toggle('active', b.getAttribute('data-sub') === sub);
+    });
+    // Ô chức năng: hiện đúng cụm của tab; ẩn hẳn khi ở Ngân hàng (bộ lọc nằm trong nội dung AJAX)
+    document.querySelectorAll('.lib-tools').forEach(function(t) {
+        t.classList.toggle('active', t.getAttribute('data-for') === sub);
+    });
+    var toolbar = document.getElementById('libToolbar');
+    if (toolbar) toolbar.style.display = '';
+    document.getElementById('lib-cauhoi').classList.toggle('active', sub === 'cauhoi');
+    document.getElementById('lib-dethi').classList.toggle('active', sub === 'dethi');
+    var tl = document.getElementById('lib-tailieu');
+    if (tl) tl.classList.toggle('active', sub === 'tailieu');
+    var nh = document.getElementById('lib-nganhang');
+    if (nh) {
+        nh.classList.toggle('active', sub === 'nganhang');
+        // Nạp nội dung Ngân hàng 1 lần khi mở lần đầu (lazy load)
+        if (sub === 'nganhang' && !nh.dataset.loaded) {
+            nh.dataset.loaded = '1';
+            taiNganHang('/ngan_hang?partial=1');
+        }
+    }
+    if (sub === 'cauhoi')  animateStatsPanel(document.querySelector('#lib-cauhoi .lib-stats'));
+    if (sub === 'tailieu') animateStatsPanel(document.querySelector('#lib-tailieu .lib-stats'));
+}
+
+// Chạy lại hiệu ứng 1 panel thống kê (donut vẽ dần, thanh mọc, số đếm tăng dần).
+// Dùng chung cho mọi panel .lib-stats (Câu hỏi / Tài liệu / Ngân hàng).
+function animateStatsPanel(panel) {
+    if (!panel) return;
+    panel.classList.remove('animate');
+    void panel.offsetWidth;            // ép reflow để animation chạy lại
+    panel.classList.add('animate');
+    panel.querySelectorAll('.count-up').forEach(function (el) {
+        var to = parseInt(el.getAttribute('data-to') || el.textContent, 10) || 0;
+        var dur = 850, t0 = performance.now();
+        function step(now) {
+            var p = Math.min(1, (now - t0) / dur);
+            var eased = 0.5 - Math.cos(Math.PI * p) / 2;   // easeInOut
+            el.textContent = Math.round(to * eased);
+            if (p < 1) requestAnimationFrame(step); else el.textContent = to;
+        }
+        requestAnimationFrame(step);
+    });
+}
+document.querySelectorAll('.lib-subtab-btn[data-sub]').forEach(function(btn) {
+    btn.addEventListener('click', function() { showLibSub(this.getAttribute('data-sub')); });
+});
+
+// Mở đúng tab con theo ?sub=... (vừa tạo đề thi xong, hoặc chọn từ dropdown navbar)
+var libSubParam = new URLSearchParams(window.location.search).get('sub');
+if (libSubParam === 'dethi') showLibSub('dethi');
+else if (libSubParam === 'cauhoi') showLibSub('cauhoi');
+else if (libSubParam === 'nganhang') showLibSub('nganhang');
+else if (libSubParam === 'tailieu') showLibSub('tailieu');
+
+// ===== Ngân hàng câu hỏi: nạp nội dung (bộ lọc + danh sách) qua AJAX vào pane =====
+function taiNganHang(url) {
+    var body = document.getElementById('nhPaneBody');
+    if (!body) return;
+    body.innerHTML = '<div class="text-center py-5 text-muted"><i class="fas fa-spinner fa-spin fs-3 mb-2 d-block"></i> Đang tải...</div>';
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.text(); })
+        .then(function(html) {
+            body.innerHTML = html;
+            // Chạy hiệu ứng panel thống kê của danh sách môn (nếu có ở mức 1)
+            animateStatsPanel(body.querySelector('.lib-stats'));
+        })
+        .catch(function() {
+            body.innerHTML = '<div class="text-center py-5 text-danger">Không tải được Ngân hàng câu hỏi. Vui lòng thử lại.</div>';
+        });
+}
+
+// Bắt submit form lọc trong pane -> nạp lại AJAX thay vì điều hướng sang trang khác
+document.addEventListener('submit', function(e) {
+    var form = e.target.closest ? e.target.closest('#lib-nganhang .nh-filter-form') : null;
+    if (!form) return;
+    e.preventDefault();
+    var params = new URLSearchParams(new FormData(form));
+    params.set('partial', '1');
+    taiNganHang('/ngan_hang?' + params.toString());
+});
+
+// Bấm nút "Xem" của 1 môn trong Ngân hàng -> mở chi tiết môn (AJAX). Đẩy History
+// để nút "Back" của trình duyệt quay về danh sách môn ngay trong pane.
+// (Trước đây click cả dòng; nay chỉ bấm nút Xem ở cột Thao tác.)
+document.addEventListener('click', function(e) {
+    var link = e.target.closest ? e.target.closest('#lib-nganhang a[href^="/ngan_hang?"]') : null;
+    if (!link) return;
+    e.preventDefault();
+    var u = new URL(link.getAttribute('href'), window.location.origin);
+    u.searchParams.set('partial', '1');
+    var ajaxUrl = u.pathname + '?' + u.searchParams.toString();
+    history.pushState({ nhDetail: 1 }, '');   // giữ nguyên URL hiển thị
+    taiNganHang(ajaxUrl);
+});
+// Back trình duyệt khi đang ở chi tiết môn -> về danh sách môn
+window.addEventListener('popstate', function() {
+    var nh = document.getElementById('lib-nganhang');
+    if (nh && nh.classList.contains('active') && nh.dataset.loaded) {
+        taiNganHang('/ngan_hang?partial=1');
+    }
+});
+
+// Lọc danh sách MÔN trong Ngân hàng theo tên (client-side)
+function filterNhMon() {
+    var kw = (document.getElementById('nhMonSearch').value || '').toLowerCase().trim();
+    document.querySelectorAll('#nhMonTableBody tr[data-mon]').forEach(function(tr) {
+        var mon = (tr.getAttribute('data-mon') || '').toLowerCase();
+        tr.style.display = mon.indexOf(kw) > -1 ? '' : 'none';
+    });
+}
+
+// Xóa câu khỏi ngân hàng (nút trong card dùng onclick="xoaKhoiNganHang(...)")
+function xoaKhoiNganHang(cauId, btn) {
+    if (!confirm('Xóa câu hỏi này khỏi Ngân hàng chung?\nCâu hỏi gốc trong thư viện cá nhân (nếu còn) không bị ảnh hưởng.')) return;
+    btn.disabled = true;
+    fetch('/xoa_khoi_ngan_hang/' + cauId, { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var card = btn.closest('.q-card');
+                if (card) {
+                    card.style.transition = 'opacity .25s, transform .25s';
+                    card.style.opacity = '0'; card.style.transform = 'translateY(-6px)';
+                    setTimeout(function(){ card.remove(); }, 250);
+                }
+                if (window.showToast) showToast('Đã xóa câu hỏi khỏi ngân hàng chung.', 'success');
+            } else {
+                btn.disabled = false;
+                if (window.showToast) showToast(data.message || 'Không xóa được!', 'danger');
+                else alert(data.message || 'Không xóa được!');
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            if (window.showToast) showToast('Lỗi kết nối, vui lòng thử lại.', 'danger');
+        });
+}
+
+// Lọc danh sách câu hỏi theo TÊN MÔN (lọc ngay tại trình duyệt)
+function filterLibrary() {
+    var kw = (document.getElementById('libSearch').value || '').toLowerCase().trim();
+    document.querySelectorAll('#libTableBody tr[data-mon]').forEach(function(tr) {
+        var mon = (tr.getAttribute('data-mon') || '').toLowerCase();
+        tr.style.display = mon.indexOf(kw) > -1 ? '' : 'none';
+    });
+}
+
+// Lọc danh sách đề thi theo TÊN ĐỀ hoặc MÔN
+function filterDeThi() {
+    var kw = (document.getElementById('deSearch').value || '').toLowerCase().trim();
+    document.querySelectorAll('#deTableBody tr[data-search]').forEach(function(tr) {
+        var hay = tr.getAttribute('data-search') || '';
+        tr.style.display = hay.indexOf(kw) > -1 ? '' : 'none';
+    });
+}
+
+// Lọc danh sách TÀI LIỆU PDF theo tên (client-side)
+function filterTaiLieu() {
+    var kw = (document.getElementById('tlSearch').value || '').toLowerCase().trim();
+    document.querySelectorAll('#tlTableBody tr[data-ten]').forEach(function(tr) {
+        var ten = (tr.getAttribute('data-ten') || '').toLowerCase();
+        tr.style.display = ten.indexOf(kw) > -1 ? '' : 'none';
+    });
+}
+
+// Xóa 1 tài liệu PDF khỏi kho (gửi kèm CSRF token theo chuẩn của app)
+function xoaTaiLieu(fname, btn) {
+    if (!confirm('Xóa tài liệu này khỏi kho? Hành động không thể hoàn tác.')) return;
+    btn.disabled = true;
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    fetch('/tai_lieu/xoa/' + encodeURIComponent(fname), {
+        method: 'POST',
+        headers: { 'X-CSRFToken': meta ? meta.content : '' }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            var tr = btn.closest('tr');
+            if (tr) {
+                tr.style.transition = 'opacity .25s';
+                tr.style.opacity = '0';
+                setTimeout(function() { tr.remove(); }, 250);
+            }
+            if (window.showToast) showToast('Đã xóa tài liệu.', 'success');
+        } else {
+            btn.disabled = false;
+            if (window.showToast) showToast(data.message || 'Không xóa được!', 'danger');
+            else alert(data.message || 'Không xóa được!');
+        }
+    })
+    .catch(function() {
+        btn.disabled = false;
+        if (window.showToast) showToast('Lỗi kết nối, vui lòng thử lại.', 'danger');
+    });
+}
+
+function themDeVaoNganHang(deThiId, btn) {
+    if (!confirm('Hành động này sẽ thêm toàn bộ câu hỏi trong đề này vào Ngân hàng câu hỏi cho các giáo viên khác cùng dùng. Bạn có đồng ý?')) return;
+
+    // Đổi trạng thái nút khi đang load
+    const originalContent = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    fetch('/them_de_vao_ngan_hang/' + deThiId, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            btn.innerHTML = '<i class="fas fa-check"></i>';
+            btn.style.background = 'rgba(56,239,125,0.2)';
+            btn.style.borderColor = 'rgba(56,239,125,0.5)';
+            alert('✅ ' + data.message);
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+            alert('❌ ' + data.message);
+        }
+    });
+}
+
+// ===== PHÂN TRANG CLIENT-SIDE cho bảng Thư viện =====
+(function initPagination() {
+    // Mỗi pane có data-paginate="id_tbody" và data-per-page="20"
+    document.querySelectorAll('.lib-sub-pane[data-paginate]').forEach(function(pane) {
+        var tbodyId = pane.getAttribute('data-paginate');
+        var perPage = parseInt(pane.getAttribute('data-per-page')) || 20;
+        var tbody = document.getElementById(tbodyId);
+        if (!tbody) return;
+
+        var allRows = Array.from(tbody.querySelectorAll('tr'));
+        // Bỏ qua dòng "trống" (colspan > 1, thường là thông báo không có dữ liệu)
+        var dataRows = allRows.filter(function(tr) {
+            return tr.querySelectorAll('td').length >= 2 || tr.querySelector('td[colspan]') === null;
+        });
+        var totalRows = dataRows.length;
+        if (totalRows <= perPage) return; // không cần phân trang nếu ít hơn 20 dòng
+
+        var totalPages = Math.ceil(totalRows / perPage);
+        var currentPage = 1;
+
+        // Tạo thanh phân trang
+        var pagNav = document.createElement('div');
+        pagNav.className = 'lib-pagination';
+        pagNav.id = 'pag-' + tbodyId;
+        // Chèn sau table-wrapper (cha của table)
+        var wrapper = tbody.closest('.table-wrapper');
+        if (wrapper) {
+            wrapper.insertAdjacentElement('afterend', pagNav);
+        } else {
+            tbody.parentNode.insertBefore(pagNav, tbody.nextSibling);
+        }
+
+        function showPage(page) {
+            currentPage = page;
+            var start = (page - 1) * perPage;
+            var end = start + perPage;
+            dataRows.forEach(function(tr, i) {
+                tr.style.display = (i >= start && i < end) ? '' : 'none';
+            });
+            renderNav();
+        }
+
+        function renderNav() {
+            var html = '';
+            // Nút Trang trước
+            html += '<button class="page-btn' + (currentPage === 1 ? ' disabled' : '') + '" onclick="window._pagInstances[\'' + tbodyId + '\'].goTo(' + (currentPage - 1) + ')" title="Trang trước">&laquo;</button>';
+            // Số trang
+            var maxShow = 5;
+            var startP = Math.max(1, currentPage - 2);
+            var endP = Math.min(totalPages, startP + maxShow - 1);
+            if (endP - startP < maxShow - 1) startP = Math.max(1, endP - maxShow + 1);
+
+            if (startP > 1) {
+                html += '<button class="page-btn" onclick="window._pagInstances[\'' + tbodyId + '\'].goTo(1)">1</button>';
+                if (startP > 2) html += '<span class="page-info">...</span>';
+            }
+            for (var p = startP; p <= endP; p++) {
+                html += '<button class="page-btn' + (p === currentPage ? ' active' : '') + '" onclick="window._pagInstances[\'' + tbodyId + '\'].goTo(' + p + ')">' + p + '</button>';
+            }
+            if (endP < totalPages) {
+                if (endP < totalPages - 1) html += '<span class="page-info">...</span>';
+                html += '<button class="page-btn" onclick="window._pagInstances[\'' + tbodyId + '\'].goTo(' + totalPages + ')">' + totalPages + '</button>';
+            }
+            // Nút Trang sau
+            html += '<button class="page-btn' + (currentPage === totalPages ? ' disabled' : '') + '" onclick="window._pagInstances[\'' + tbodyId + '\'].goTo(' + (currentPage + 1) + ')" title="Trang sau">&raquo;</button>';
+            html += '<span class="page-info">' + currentPage + ' / ' + totalPages + '</span>';
+            pagNav.innerHTML = html;
+        }
+
+        var instance = { goTo: showPage };
+        if (!window._pagInstances) window._pagInstances = {};
+        window._pagInstances[tbodyId] = instance;
+
+        // Gắn thêm callback để reset pagination khi lọc
+        var origFilterFunc = null;
+        if (tbodyId === 'libTableBody') {
+            origFilterFunc = window.filterLibrary;
+            window.filterLibrary = function() {
+                origFilterFunc();
+                setTimeout(function() { showPage(1); }, 50);
+            };
+        } else if (tbodyId === 'deTableBody') {
+            origFilterFunc = window.filterDeThi;
+            window.filterDeThi = function() {
+                origFilterFunc();
+                setTimeout(function() { showPage(1); }, 50);
+            };
+        } else if (tbodyId === 'tlTableBody') {
+            origFilterFunc = window.filterTaiLieu;
+            window.filterTaiLieu = function() {
+                origFilterFunc();
+                setTimeout(function() { showPage(1); }, 50);
+            };
+        }
+
+        showPage(1);
+    });
+})();
+</script>

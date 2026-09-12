@@ -1,0 +1,636 @@
+{#
+  lam_bai.html — TRANG LÀM BÀI THI. Trang quan trọng nhất phía thí sinh.
+
+  Cố tình KHÔNG kế thừa base.html: không navbar, không menu, không link đi đâu
+  khác. Vào thi là chỉ có đề thi trước mặt.
+
+  Bốn cơ chế chạy song song trong trang này:
+
+  1. ĐỒNG HỒ ĐẾM NGƯỢC — số giây còn lại do SERVER tính rồi truyền xuống, không
+     lấy giờ máy thí sinh (máy họ có thể chỉnh sai giờ). Hết giờ thì tự nộp.
+
+  2. LƯU NHÁP TỰ ĐỘNG — mỗi lần chọn đáp án đều ghi vào localStorage. Mất điện,
+     sập trình duyệt, lỡ tay đóng tab: mở lại vẫn còn nguyên bài đang làm.
+
+  3. GIÁM SÁT WEBCAM — xin phép trước rồi mới bật camera, và luôn hiện khung
+     hình để thí sinh biết mình đang bị quay. Ảnh gửi thẳng cho giáo viên qua
+     Socket.IO, KHÔNG lưu lại ở đâu cả.
+
+  4. ĐẾM SỐ LẦN RỜI TAB — dùng sự kiện visibilitychange chứ không dùng
+     window.blur: trên điện thoại, blur nổ cả khi bàn phím ảo hiện lên, và thí
+     sinh sẽ bị ghi nhận gian lận oan chỉ vì gõ chữ.
+#}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Làm bài thi - Khoa TT-TT</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {# Trang này KHÔNG kế thừa base.html nên phải tự nạp font Be Vietnam Pro,
+       nếu không sẽ rơi về 'Segoe UI' và lệch hẳn so với các trang còn lại. #}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/controls.css') }}">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            background: #f4f7fb; color: #0f172a; padding-top: 80px; padding-bottom: 40px;
+            font-family: 'Be Vietnam Pro', 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+        }
+        /* Bootstrap và controls.css đặt font riêng cho input/nút -> ép về cùng một font */
+        body, button, input, select, textarea, .btn {
+            font-family: 'Be Vietnam Pro', 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+        }
+        .exam-topbar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: linear-gradient(135deg, #ffffff, #eff6ff); backdrop-filter: blur(10px);
+            border-bottom: 1px solid #dbeafe;
+            box-shadow: 0 2px 14px rgba(37, 99, 235, 0.08);
+            padding: 14px 24px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .exam-name { font-weight: 700; color: #0f172a; }
+        .exam-name small { color: #64748b; font-weight: 400; }
+        .timer {
+            background: rgba(255,193,7,0.12); border: 1px solid rgba(255,193,7,0.3);
+            color: #d97706; padding: 8px 18px; border-radius: 12px;
+            font-weight: 800; font-size: 1.15rem; font-variant-numeric: tabular-nums;
+        }
+        .timer.danger {
+            background: rgba(255,107,107,0.15); border-color: rgba(255,107,107,0.4); color: #dc2626;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse { 50% { opacity: 0.6; } }
+        .q-card {
+            background: #ffffff; border: 1px solid #e2e8f0;
+            border-radius: 16px; padding: 22px; margin-bottom: 16px; transition: border-color 0.2s;
+        }
+        .q-card.answered { border-color: rgba(37,99,235,0.35); }
+        .q-num { font-size: 0.95rem; font-weight: 700; color: #2563eb; text-transform: uppercase; letter-spacing: 1px; }
+        .q-text { font-size: 1.05rem; font-weight: 600; margin: 8px 0 18px; line-height: 1.6; }
+        .opt-label {
+            display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+            border-radius: 10px; margin-bottom: 0; cursor: pointer;
+            background: #ffffff; border: 1px solid #eef2f9;
+            transition: all 0.18s; height: 100%;
+        }
+        .opt-label:hover { border-color: rgba(37,99,235,0.4); background: rgba(37,99,235,0.06); }
+        .opt-label input { display: none; }
+        .opt-letter {
+            width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; background: #e2e8f0; color: #64748b;
+        }
+        .opt-label input:checked + .opt-letter { background: linear-gradient(135deg,#2563eb,#1d4ed8); color: #ffffff; }
+        .opt-label:has(input:checked) { border-color: rgba(37,99,235,0.4); background: rgba(37,99,235,0.08); }
+        .opt-text { color: #334155; }
+        .submit-bar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.97); backdrop-filter: blur(12px);
+            border-top: 1px solid #e2e8f0;
+            padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; z-index: 1000;
+        }
+        .progress-text { color: #64748b; font-size: 0.9rem; }
+        .progress-text strong { color: #16a34a; }
+        .btn-submit {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8); border: none; color: #ffffff;
+            padding: 12px 36px; border-radius: 12px; font-weight: 800; cursor: pointer; transition: all 0.3s;
+        }
+        .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(37,99,235,0.4); }
+        .container-exam { max-width: 800px; margin: 0 auto; padding: 20px 16px 90px; }
+
+        /* Trạng thái camera trên thanh trên */
+        .cam-status {
+            padding: 6px 12px; border-radius: 10px; font-weight: 700; font-size: .82rem;
+        }
+        .cam-status.on  { background: rgba(56,239,125,0.15); color: #16a34a; border: 1px solid rgba(56,239,125,0.35); }
+        .cam-status.off { background: rgba(255,107,107,0.15); color: #dc2626; border: 1px solid rgba(255,107,107,0.35); }
+
+        /* Khung camera tự xem — ẨN ở phía HỌC SINH (camera chỉ hiển thị cho GV
+           giám sát). Đẩy RA NGOÀI MÀN HÌNH thay vì display:none để video vẫn
+           chạy ngầm và chụp ảnh gửi về GV được (display:none làm đứng khung hình). */
+        .self-cam {
+            position: fixed; left: -10000px; top: 0; z-index: -1;
+            width: 180px; border-radius: 12px; overflow: hidden;
+            border: 2px solid rgba(15,23,42,0.15); box-shadow: 0 8px 24px rgba(0,0,0,.25);
+            background: #0f172a; pointer-events: none;
+        }
+        .self-cam video { width: 100%; display: block; aspect-ratio: 4/3; object-fit: cover; transform: scaleX(-1); }
+        .self-cam-label {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: rgba(15,23,42,.7); color: #fff; font-size: .68rem; font-weight: 700;
+            padding: 3px 8px; display: flex; align-items: center; gap: 5px;
+        }
+
+        /* Lớp phủ cảnh báo */
+        .canhbao-overlay {
+            display: none; position: fixed; inset: 0; z-index: 3000;
+            background: rgba(127,29,29,0.55); backdrop-filter: blur(4px);
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .canhbao-overlay.show { display: flex; }
+        .canhbao-box {
+            background: #fff; border-radius: 20px; padding: 36px 32px; max-width: 440px; width: 100%;
+            text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.35);
+            animation: cbIn .25s ease;
+        }
+        @keyframes cbIn { from { transform: scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+        .canhbao-icon { font-size: 3rem; color: #dc2626; margin-bottom: 12px; }
+        .canhbao-box h4 { font-weight: 800; color: #dc2626; margin-bottom: 12px; }
+        .canhbao-box p { color: #334155; font-size: .95rem; margin-bottom: 10px; line-height: 1.5; }
+        .btn-tieptuc {
+            margin-top: 18px; background: #dc2626; color: #fff; border: none;
+            padding: 12px 28px; border-radius: 12px; font-weight: 700; cursor: pointer;
+        }
+        .btn-tieptuc:hover { background: #b91c1c; }
+
+        /* ===== TỐI ƯU MÀN HÌNH ĐIỆN THOẠI ===== */
+        @media (max-width: 576px) {
+            body { padding-top: 64px; padding-bottom: 76px; }
+            .exam-topbar { padding: 10px 12px; }
+            .exam-name { font-size: 0.92rem; max-width: 58%; line-height: 1.3; }
+            .exam-name small { display: none !important; }
+            .timer { padding: 6px 12px; font-size: 1rem; }
+            .cam-status { padding: 5px 9px; font-size: 0.74rem; }
+            .container-exam { padding: 16px 12px 96px; }
+            .q-card { padding: 16px; border-radius: 14px; }
+            .q-text { font-size: 1rem; margin: 6px 0 14px; }
+            .opt-label { padding: 11px 12px; gap: 10px; }
+            .opt-letter { width: 28px; height: 28px; }
+            .submit-bar { padding: 10px 12px; gap: 10px; }
+            .progress-text { font-size: 0.82rem; }
+            .btn-submit { padding: 11px 20px; font-size: 0.92rem; white-space: nowrap; }
+            .canhbao-box { padding: 28px 20px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Xin đồng ý giám sát webcam TRƯỚC khi bật camera -->
+    <div id="consentOverlay" style="position:fixed;inset:0;z-index:3000;background:rgba(15,23,42,.78);display:flex;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:#fff;border-radius:18px;max-width:520px;width:100%;padding:32px;box-shadow:0 20px 50px rgba(0,0,0,.3);">
+            <div style="text-align:center;font-size:38px;color:#2563eb;margin-bottom:10px;"><i class="fas fa-video"></i></div>
+            <h4 style="text-align:center;font-weight:800;margin-bottom:14px;">Giám sát bằng webcam</h4>
+            <p style="color:#475569;font-size:14px;line-height:1.7;">
+                Trong quá trình làm bài, hệ thống sẽ <strong>chụp ảnh qua webcam</strong> định kỳ và ghi nhận
+                khi bạn rời khỏi màn hình thi nhằm đảm bảo tính minh bạch của kỳ thi. Ảnh chỉ dùng cho mục đích
+                giám sát và sẽ được <strong>xóa tự động</strong> sau khi kỳ thi kết thúc. Xem thêm
+                <a href="{{ url_for('auth.chinh_sach_bao_mat') }}" target="_blank">Chính sách bảo mật</a>.
+            </p>
+            <label style="display:flex;align-items:flex-start;gap:8px;font-size:14px;color:#334155;margin:14px 0;cursor:pointer;">
+                <input type="checkbox" id="consentCheck" style="margin-top:3px;">
+                <span>Tôi đồng ý bật webcam giám sát trong suốt quá trình làm bài.</span>
+            </label>
+            <div style="display:flex;gap:10px;">
+                <button type="button" id="consentDecline" style="flex:1;padding:11px;border-radius:10px;border:1px solid #e2e8f0;background:#fff;color:#475569;font-weight:600;cursor:pointer;">Không đồng ý</button>
+                <button type="button" id="consentAgree" disabled style="flex:1;padding:11px;border-radius:10px;border:none;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;opacity:.6;">Đồng ý &amp; bắt đầu</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="exam-topbar">
+        <div class="exam-name">
+            <i class="fas fa-user-graduate me-2" style="color:#16a34a;"></i>{{ thi_sinh.ho_ten }}
+            <small class="ms-2 d-none d-md-inline">Phòng: {{ thi_sinh.ma_phong }}</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span id="camStatus" class="cam-status off" style="display:none;"><i class="fas fa-video-slash me-1"></i>Camera</span>
+            <div class="timer" id="timer"><i class="fas fa-clock me-1"></i><span id="timeText">--:--</span></div>
+        </div>
+    </div>
+
+    <!-- Camera tự xem (minh bạch: thí sinh biết mình đang được giám sát) -->
+    <div class="self-cam" id="selfCam">
+        <video id="camVideo" autoplay muted playsinline></video>
+        <div class="self-cam-label"><i class="fas fa-circle" style="color:#dc2626;font-size:.5rem;"></i> Đang giám sát</div>
+    </div>
+    <canvas id="camCanvas" width="320" height="240" style="display:none;"></canvas>
+
+    <!-- Lớp phủ cảnh báo khi rời tab -->
+    <div class="canhbao-overlay" id="canhBaoOverlay">
+        <div class="canhbao-box">
+            <div class="canhbao-icon"><i class="fas fa-triangle-exclamation"></i></div>
+            <h4>Cảnh báo gian lận!</h4>
+            <p>Bạn vừa <strong>rời khỏi màn hình thi</strong>. Hệ thống đã ghi nhận.</p>
+            <p class="text-danger fw-bold mb-0" id="canhBaoSoLan">Nếu tiếp tục rời khỏi màn hình, bài thi sẽ tự động bị nộp!</p>
+            <button type="button" class="btn-tieptuc" onclick="dongCanhBao()">Tôi đã hiểu, tiếp tục thi</button>
+        </div>
+    </div>
+
+    <form method="POST" action="/lam_bai/{{ thi_sinh.id }}" id="examForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="container-exam">
+            {% for q in questions %}
+            <div class="q-card" id="qcard_{{ q.id }}">
+                <span class="q-num"><i class="fas fa-circle-dot me-1"></i>Câu {{ loop.index }}/{{ questions|length }}</span>
+                <div class="q-text">{{ q.noi_dung }}</div>
+                {% set _ml = [q.cau_a|default('')|length, q.cau_b|default('')|length, q.cau_c|default('')|length, q.cau_d|default('')|length]|max %}
+                {% if _ml <= 30 %}{% set _col = 'col-6 col-md-3' %}{% elif _ml <= 80 %}{% set _col = 'col-12 col-sm-6' %}{% else %}{% set _col = 'col-12' %}{% endif %}
+                <div class="row g-2">
+                {% for opt, val in [('A', q.cau_a), ('B', q.cau_b), ('C', q.cau_c), ('D', q.cau_d)] %}
+                <div class="{{ _col }}">
+                <label class="opt-label">
+                    <input type="radio" name="cau_{{ q.id }}" value="{{ opt }}" onchange="markAnswered({{ q.id }})">
+                    <div class="opt-letter">{{ opt }}</div>
+                    <div class="opt-text">{{ val }}</div>
+                </label>
+                </div>
+                {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="submit-bar">
+            <div class="d-flex align-items-center gap-3">
+                <button type="button" class="btn-qnav" onclick="toggleQNav()">
+                    <i class="fas fa-table-cells me-1"></i> Danh sách câu
+                </button>
+                <div class="progress-text">Đã trả lời: <strong id="answeredCount">0</strong>/{{ questions|length }}</div>
+            </div>
+            <button type="button" class="btn-submit" onclick="confirmSubmit()">
+                <i class="fas fa-paper-plane me-2"></i>Nộp bài
+            </button>
+        </div>
+    </form>
+
+    <script>
+        var TONG_SO = {{ questions|length }};
+        var answered = {};
+
+        function markAnswered(qid) {
+            answered[qid] = true;
+            var card = document.getElementById('qcard_' + qid);
+            if (card) card.classList.add('answered');
+            document.getElementById('answeredCount').textContent = Object.keys(answered).length;
+        }
+
+        // ===== ĐỒNG HỒ ĐẾM NGƯỢC =====
+        var conLai = parseInt("{{ thoi_gian_con_lai }}");
+        var daNop = false;
+        function updateTimer() {
+            if (conLai <= 0) {
+                document.getElementById('timeText').textContent = '00:00';
+                autoSubmit();
+                return;
+            }
+            var phut = Math.floor(conLai / 60);
+            var giay = conLai % 60;
+            document.getElementById('timeText').textContent =
+                (phut < 10 ? '0' : '') + phut + ':' + (giay < 10 ? '0' : '') + giay;
+            if (conLai <= 60) document.getElementById('timer').classList.add('danger');
+            conLai--;
+        }
+        var dongHo = setInterval(updateTimer, 1000);
+        updateTimer();
+
+        function autoSubmit() {
+            if (daNop) return;
+            daNop = true;
+            clearInterval(dongHo);
+            alert('⏰ Đã hết giờ! Bài thi sẽ được nộp tự động.');
+            try { localStorage.removeItem(LB_KEY); } catch (e) {}
+            document.getElementById('examForm').submit();
+        }
+
+        function confirmSubmit() {
+            dangThaoTac = true;
+            var chuaLam = TONG_SO - Object.keys(answered).length;
+            var msg = chuaLam > 0
+                ? 'Bạn còn ' + chuaLam + ' câu chưa trả lời. Chắc chắn nộp bài?'
+                : 'Bạn chắc chắn muốn nộp bài?';
+            if (confirm(msg)) {
+                daNop = true;
+                clearInterval(dongHo);
+                try { localStorage.removeItem(LB_KEY); } catch (e) {}
+            document.getElementById('examForm').submit();
+            } else {
+                dangThaoTac = false;
+            }
+        }
+
+        // Cảnh báo khi rời trang
+        window.addEventListener('beforeunload', function(e) {
+            if (!daNop) { e.preventDefault(); e.returnValue = ''; }
+        });
+
+        // ===================================================
+        // GIÁM SÁT WEBCAM (minh bạch) + CHỐNG RỜI MÀN HÌNH THI
+        // ===================================================
+        var TS_ID        = {{ thi_sinh.id }};
+        var PHONG_ID     = {{ thi_sinh.phong_thi_id }};
+        // Kênh realtime gửi hình webcam trực tiếp cho giáo viên (không lưu DB)
+        var gsSocket     = (typeof io !== 'undefined') ? io() : null;
+        var camOk        = false;
+        var dangThaoTac  = false;   // true khi đang thao tác nộp -> bỏ qua blur
+        var soLanRoi     = 0;
+        var lanCuoiRoi   = 0;
+        var daGanChong   = false;
+
+        var camVideo  = document.getElementById('camVideo');
+        var camCanvas = document.getElementById('camCanvas');
+        var camCtx    = camCanvas.getContext('2d');
+
+        function chupAnh() {
+            if (!camOk || daNop) return;
+            try {
+                var vw = camVideo.videoWidth, vh = camVideo.videoHeight;
+                if (!vw || !vh) return;                       // video chưa sẵn sàng
+                var dw = camCanvas.width, dh = camCanvas.height;   // 320x240 (4:3)
+                // Vẽ kiểu "cover": cắt phần giữa của video theo ĐÚNG tỉ lệ canvas
+                // để KHÔNG bóp méo mặt (webcam thường trả 16:9 khác 4:3 của canvas).
+                var scale = Math.max(dw / vw, dh / vh);
+                var sw = dw / scale, sh = dh / scale;         // vùng cắt từ video
+                var sx = (vw - sw) / 2, sy = (vh - sh) / 2;   // căn giữa
+                camCtx.clearRect(0, 0, dw, dh);
+                camCtx.drawImage(camVideo, sx, sy, sw, sh, 0, 0, dw, dh);
+                var anh = camCanvas.toDataURL('image/jpeg', 0.45);
+                // Gửi khung hình TRỰC TIẾP qua Socket.IO -> giáo viên xem realtime.
+                // Không lưu vào database nên nhẹ máy chủ.
+                if (gsSocket && gsSocket.connected) {
+                    gsSocket.emit('hs_frame', { phong_id: PHONG_ID, ts_id: TS_ID, image: anh });
+                }
+            } catch (e) {}
+        }
+
+        function moCamera() {
+            var el = document.getElementById('camStatus');
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                batDauChongGianLan();
+                return;
+            }
+            navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: false })
+                .then(function(stream) {
+                    camVideo.srcObject = stream;
+                    camOk = true;
+                    el.className = 'cam-status on';
+                    el.innerHTML = '<i class="fas fa-video me-1"></i>Camera';
+                    setTimeout(chupAnh, 1000);
+                    setInterval(chupAnh, 2000);   // ~ video chậm: 1 khung / 2 giây
+                    batDauChongGianLan();
+                })
+                .catch(function() {
+                    el.className = 'cam-status off';
+                    el.innerHTML = '<i class="fas fa-video-slash me-1"></i>Camera tắt';
+                    document.getElementById('selfCam').style.display = 'none';
+                    batDauChongGianLan();
+                });
+        }
+
+        function nopBaiGianLan() {
+            if (daNop) return;
+            daNop = true;
+            clearInterval(dongHo);
+            try { localStorage.removeItem(LB_KEY); } catch (e) {}
+            document.getElementById('examForm').submit();
+        }
+
+        // ===== NGƯỠNG CHỐNG GIAN LẬN (chỉnh ở đây nếu muốn nghiêm/nhẹ hơn) =====
+        var ROI_TOI_DA      = 4;      // rời màn hình ĐỦ số lần này -> tự nộp bài
+        var ROI_TOI_THIEU_MS = 1500;  // rời dưới 1,5s thì BỎ QUA (bàn phím bật lên,
+                                      // kéo thanh thông báo... trên điện thoại)
+        var BO_QUA_DAU_MS   = 3000;   // 3 giây đầu sau khi vào bài: bỏ qua hết
+                                      // (hộp thoại xin quyền camera hay gây blur)
+        var mocBatDauChong  = 0;
+        var mocAn           = 0;      // thời điểm màn hình bị ẩn
+
+        // Gửi kèm CSRF token, nếu không Flask-WTF chặn POST (400) và số lần rời
+        // màn hình sẽ KHÔNG BAO GIỜ được ghi vào DB -> giáo viên luôn thấy 0.
+        var CSRF_TOKEN = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+
+        function ghiNhanRoiTab() {
+            fetch('/giam_sat/roi_tab/' + TS_ID, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': CSRF_TOKEN },
+            }).catch(function () {});
+        }
+
+        // Chỉ tính MỘT lần rời màn hình khi thí sinh QUAY LẠI và thời gian vắng
+        // mặt đủ dài. Cách này tránh nộp bài oan trên điện thoại (cuộc gọi đến,
+        // thông báo, màn hình tự khóa đều bắn sự kiện y như chuyển tab).
+        function xuLyQuayLai() {
+            if (daNop || dangThaoTac || !mocAn) return;
+            var vang = Date.now() - mocAn;
+            mocAn = 0;
+            if (vang < ROI_TOI_THIEU_MS) return;               // chớp nhoáng -> bỏ qua
+            if (Date.now() - mocBatDauChong < BO_QUA_DAU_MS) return;
+
+            soLanRoi++;
+            lanCuoiRoi = Date.now();
+            ghiNhanRoiTab();
+
+            if (soLanRoi >= ROI_TOI_DA) {
+                nopBaiGianLan();
+                return;
+            }
+            var conLaiLan = ROI_TOI_DA - soLanRoi;
+            var el = document.getElementById('canhBaoSoLan');
+            if (el) {
+                el.textContent = 'Bạn đã rời màn hình thi ' + soLanRoi + ' lần. '
+                               + 'Còn ' + conLaiLan + ' lần nữa bài thi sẽ bị nộp tự động.';
+            }
+            document.getElementById('canhBaoOverlay').classList.add('show');
+        }
+
+        function dongCanhBao() {
+            document.getElementById('canhBaoOverlay').classList.remove('show');
+        }
+
+        // Chỉ bật bắt sự kiện SAU khi đã xử lý xong xin quyền camera
+        // (để hộp thoại xin quyền không bị tính nhầm là "rời màn hình").
+        // CHỈ dùng visibilitychange — KHÔNG dùng window.blur, vì trên điện thoại
+        // blur bắn cả khi bật bàn phím ảo hay chạm thanh địa chỉ.
+        function batDauChongGianLan() {
+            if (daGanChong) return;
+            daGanChong = true;
+            mocBatDauChong = Date.now();
+            document.addEventListener('visibilitychange', function () {
+                if (daNop || dangThaoTac) return;
+                if (document.hidden) {
+                    mocAn = Date.now();
+                } else {
+                    xuLyQuayLai();
+                }
+            });
+        }
+
+        // Chỉ bật camera & chống gian lận SAU KHI thí sinh đồng ý giám sát
+        (function () {
+            var ov  = document.getElementById('consentOverlay');
+            var chk = document.getElementById('consentCheck');
+            var ok  = document.getElementById('consentAgree');
+            var no  = document.getElementById('consentDecline');
+            if (!ov || !chk || !ok) { moCamera(); return; }
+            chk.addEventListener('change', function () {
+                ok.disabled = !chk.checked;
+                ok.style.opacity = chk.checked ? '1' : '.6';
+            });
+            ok.addEventListener('click', function () {
+                ov.style.display = 'none';
+                moCamera();
+            });
+            no.addEventListener('click', function () {
+                window.location.href = '/';
+            });
+        })();
+    </script>
+    <!-- ===== ĐIỀU HƯỚNG CÂU HỎI + LƯU NHÁP TỰ ĐỘNG ===== -->
+    <style>
+        .q-card { position: relative; }
+        .btn-qnav {
+            background: #fff; border: 1px solid #e2e8f0; color: #334155;
+            padding: 9px 16px; border-radius: 12px; font-weight: 700; cursor: pointer;
+            transition: all .2s; white-space: nowrap;
+        }
+        .btn-qnav:hover { border-color: #2563eb; color: #2563eb; }
+        .q-flag {
+            position: absolute; top: 16px; right: 16px;
+            background: transparent; border: 1px solid #e2e8f0; color: #94a3b8;
+            width: 32px; height: 32px; border-radius: 9px; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center; transition: all .18s;
+        }
+        .q-flag:hover { border-color: #f59e0b; color: #f59e0b; }
+        .q-flag.on { background: #fff7ed; border-color: #f59e0b; color: #f59e0b; }
+        .qnav-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 2500; display: none; }
+        .qnav-overlay.show { display: block; }
+        .qnav-panel {
+            position: fixed; left: 0; right: 0; bottom: 0; background: #fff;
+            border-top-left-radius: 18px; border-top-right-radius: 18px; padding: 18px 20px 24px;
+            z-index: 2501; max-height: 72vh; overflow-y: auto;
+            box-shadow: 0 -12px 40px rgba(0,0,0,.22);
+            transform: translateY(100%); transition: transform .26s cubic-bezier(.16,1,.3,1);
+        }
+        .qnav-overlay.show .qnav-panel { transform: none; }
+        .qnav-top { display: flex; justify-content: space-between; align-items: center; }
+        .qnav-top strong { font-size: 1.05rem; color: #0f172a; }
+        .qnav-x { background: transparent; border: none; font-size: 1.5rem; line-height: 1; color: #94a3b8; cursor: pointer; }
+        .qnav-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; font-size: .8rem; color: #64748b; }
+        .qnav-legend span { display: inline-flex; align-items: center; gap: 6px; }
+        .lg-dot { width: 14px; height: 14px; border-radius: 4px; display: inline-block; border: 1px solid #e2e8f0; }
+        .qnav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 8px; margin-top: 14px; }
+        .qnav-cell {
+            aspect-ratio: 1; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc;
+            font-weight: 700; color: #475569; cursor: pointer; position: relative;
+            display: flex; align-items: center; justify-content: center; transition: all .15s;
+        }
+        .qnav-cell:hover { border-color: #2563eb; }
+        .qnav-cell.answered { background: rgba(56,239,125,.16); border-color: rgba(22,163,74,.45); color: #15803d; }
+        .qnav-cell.flagged::after { content: ''; position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
+        .save-hint { position: fixed; bottom: 86px; right: 16px; background: rgba(15,23,42,.85); color: #fff;
+            font-size: .76rem; padding: 6px 12px; border-radius: 20px; z-index: 1200; opacity: 0;
+            transition: opacity .3s; pointer-events: none; }
+        .save-hint.show { opacity: 1; }
+    </style>
+
+    <div class="qnav-overlay" id="qnavOverlay">
+        <div class="qnav-panel">
+            <div class="qnav-top">
+                <strong><i class="fas fa-table-cells me-2" style="color:#2563eb;"></i>Danh sách câu hỏi</strong>
+                <button type="button" class="qnav-x" onclick="toggleQNav()">&times;</button>
+            </div>
+            <div class="qnav-legend">
+                <span><i class="lg-dot" style="background:rgba(56,239,125,.16);border-color:rgba(22,163,74,.45);"></i> Đã trả lời</span>
+                <span><i class="lg-dot"></i> Chưa trả lời</span>
+                <span><i class="fas fa-flag" style="color:#f59e0b;"></i> Đánh dấu xem lại</span>
+            </div>
+            <div class="qnav-grid" id="qnavGrid"></div>
+        </div>
+    </div>
+    <div class="save-hint" id="saveHint"><i class="fas fa-cloud me-1"></i>Đã lưu nháp</div>
+
+    <script>
+    (function () {
+        window.LB_KEY = 'lambai_' + TS_ID;
+        var overlay = document.getElementById('qnavOverlay');
+        var grid    = document.getElementById('qnavGrid');
+        var hint    = document.getElementById('saveHint');
+        var form    = document.getElementById('examForm');
+        var cards   = Array.prototype.slice.call(document.querySelectorAll('.q-card'));
+        var flags   = {};        // { qid: true }
+        var qids    = cards.map(function (c) { return c.id.replace('qcard_', ''); });
+
+        // ----- Đọc nháp đã lưu -----
+        var saved = {};
+        try { saved = JSON.parse(localStorage.getItem(LB_KEY)) || {}; } catch (e) { saved = {}; }
+        flags = saved.flags || {};
+
+        // ----- Nút cờ "đánh dấu xem lại" cho từng câu -----
+        cards.forEach(function (card, i) {
+            var qid = qids[i];
+            var fb = document.createElement('button');
+            fb.type = 'button';
+            fb.className = 'q-flag' + (flags[qid] ? ' on' : '');
+            fb.title = 'Đánh dấu để xem lại';
+            fb.innerHTML = '<i class="fas fa-flag"></i>';
+            fb.onclick = function () {
+                flags[qid] = !flags[qid];
+                fb.classList.toggle('on', !!flags[qid]);
+                luuNhap(); capNhatNav();
+            };
+            card.appendChild(fb);
+        });
+
+        // ----- Khôi phục đáp án đã chọn (sau F5 / mất mạng) -----
+        var answersSaved = saved.answers || {};
+        Object.keys(answersSaved).forEach(function (qid) {
+            var inp = form.querySelector('input[name="cau_' + qid + '"][value="' + answersSaved[qid] + '"]');
+            if (inp) { inp.checked = true; if (typeof markAnswered === 'function') markAnswered(qid); }
+        });
+
+        // ----- Lưu nháp mỗi khi chọn đáp án -----
+        var hintTimer;
+        function luuNhap() {
+            var ans = {};
+            form.querySelectorAll('input[type="radio"]:checked').forEach(function (r) {
+                ans[r.name.replace('cau_', '')] = r.value;
+            });
+            try { localStorage.setItem(LB_KEY, JSON.stringify({ answers: ans, flags: flags })); } catch (e) {}
+            hint.classList.add('show');
+            clearTimeout(hintTimer);
+            hintTimer = setTimeout(function () { hint.classList.remove('show'); }, 1200);
+        }
+        form.addEventListener('change', function (e) {
+            if (e.target && e.target.name && e.target.name.indexOf('cau_') === 0) {
+                luuNhap(); capNhatNav();
+            }
+        });
+
+        // ----- Bảng điều hướng -----
+        function daTraLoi(qid) {
+            return !!form.querySelector('input[name="cau_' + qid + '"]:checked');
+        }
+        function capNhatNav() {
+            grid.querySelectorAll('.qnav-cell').forEach(function (cell) {
+                var qid = cell.dataset.qid;
+                cell.classList.toggle('answered', daTraLoi(qid));
+                cell.classList.toggle('flagged', !!flags[qid]);
+            });
+        }
+        cards.forEach(function (card, i) {
+            var qid = qids[i];
+            var cell = document.createElement('button');
+            cell.type = 'button';
+            cell.className = 'qnav-cell';
+            cell.dataset.qid = qid;
+            cell.textContent = (i + 1);
+            cell.onclick = function () {
+                toggleQNav();
+                var y = card.getBoundingClientRect().top + window.pageYOffset - 80;
+                window.scrollTo({ top: y, behavior: 'smooth' });
+            };
+            grid.appendChild(cell);
+        });
+        capNhatNav();
+
+        window.toggleQNav = function () {
+            overlay.classList.toggle('show');
+            if (overlay.classList.contains('show')) capNhatNav();
+        };
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) toggleQNav(); });
+    })();
+    </script>
+    <script src="{{ url_for('static', filename='js/flash.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+/* =====================================================================
+   controls.css — CHUẨN HOÁ NÚT & Ô NHẬP / COMBOBOX cho toàn hệ thống
+   Mục tiêu: mọi ô nhập, combobox và nút hành động trông ĐỒNG NHẤT và đẹp.
+   - Ô nhập / combobox: cùng viền, padding, trạng thái hover + focus (glow xanh)
+   - Combobox: mũi tên tùy biến đồng nhất
+   - Nút chính: cùng 1 gradient động + hiệu ứng nhấc/nhún + vòng focus
+   Nạp SAU form.css / auth.css / ui-enhance.css để hài hoà (square.css nạp sau cùng
+   lo phần bo vuông).
+   ===================================================================== */
+
+/* Toàn site dùng theme SÁNG — chặn trình duyệt/điện thoại (iOS/Android Dark Mode)
+   tự đảo màu nền, ô nhập, scrollbar. Đây là lý do ô nhập bị xám trên điện thoại. */
+html { color-scheme: light; }
+
+/* =========================================================
+   1) Ô NHẬP & COMBOBOX
+   ========================================================= */
+.form-control,
+.form-select,
+.form-control-dark,
+.form-select-dark,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+textarea,
+select {
+    background-color: var(--surface);
+    border: 1.5px solid var(--border-strong);
+    color: var(--text-primary);
+    /* Ép màu chữ + theme sáng để máy bật Dark Mode KHÔNG đảo ô nhập thành xám/đen */
+    -webkit-text-fill-color: var(--text-primary);
+    color-scheme: light;
+    padding: 11px 14px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    line-height: 1.45;
+    transition: border-color 0.2s var(--ease),
+                box-shadow 0.2s var(--ease),
+                background 0.2s var(--ease);
+}
+
+/* Hover: viền sáng dần (trừ ô chọn nhỏ) */
+.form-control:hover,
+.form-select:hover,
+.form-control-dark:hover,
+.form-select-dark:hover,
+textarea:hover,
+select:hover,
+input[type="text"]:hover,
+input[type="email"]:hover,
+input[type="password"]:hover,
+input[type="number"]:hover,
+input[type="search"]:hover {
+    border-color: var(--primary-light);
+}
+
+/* Focus: nền trắng + vòng glow xanh đồng nhất */
+.form-control:focus,
+.form-select:focus,
+.form-control-dark:focus,
+.form-select-dark:focus,
+textarea:focus,
+select:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+input[type="date"]:focus,
+input[type="time"]:focus,
+input[type="datetime-local"]:focus {
+    background-color: #fff;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+    outline: none;
+}
+
+/* Chữ gợi ý (placeholder) trong MỌI ô nhập: xám nhạt + không đậm -> tránh nhầm là nội dung đã nhập.
+   PHẢI đặt cả -webkit-text-fill-color vì input có -webkit-text-fill-color (chống Dark Mode)
+   sẽ đè lên màu placeholder trên Chrome/Edge nếu không ghi đè lại ở đây. */
+::placeholder {
+    color: #aeb6c2 !important;
+    -webkit-text-fill-color: #aeb6c2 !important;
+    opacity: 1;
+    font-weight: 400 !important;
+}
+
+textarea { resize: vertical; min-height: 90px; }
+
+/* Combobox: ẩn mũi tên mặc định, thay bằng chevron tùy biến đồng nhất */
+select,
+.form-select,
+.form-select-dark {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    background-size: 15px;
+    padding-right: 40px;
+    cursor: pointer;
+}
+select:focus,
+.form-select:focus,
+.form-select-dark:focus {
+    /* đổi chevron sang xanh khi focus cho khớp viền */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+}
+
+/* Không áp chevron/nền cho select nằm trong ô gộp có icon riêng (trang đăng nhập) */
+.input-group-custom select {
+    background-image: none;
+    padding-right: 12px;
+    border: none;
+}
+
+/* =========================================================
+   2) NÚT HÀNH ĐỘNG CHÍNH — gom về cùng 1 gradient động đẹp
+   ========================================================= */
+.btn-tao-phong,
+.lib-btn-new,
+.btn-tdt,
+.btn-primary-sm,
+.btn-filter,
+.btn-them-tat-ca,
+.btn-auth.primary,
+.btn-primary {
+    position: relative;
+    overflow: hidden;
+    /* !important để gradient động thắng các style nút định nghĩa riêng trong từng trang */
+    background: linear-gradient(120deg, #2563eb, #0ea5e9, #6366f1, #2563eb) !important;
+    background-size: 220% auto !important;
+    color: #fff !important;
+    border: none !important;
+    font-weight: 700;
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.32);
+    transition: transform 0.25s var(--ease),
+                box-shadow 0.25s var(--ease),
+                background-position 0.6s var(--ease),
+                filter 0.2s var(--ease) !important;
+}
+
+/* Login/Register: nút đăng nhập nền ĐEN (ghi đè gradient xanh mặc định) */
+.login-card .btn-auth.primary,
+.register-card .btn-auth.primary {
+    background: #1a1a1a !important;
+    background-size: auto !important;
+    color: white !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.30) !important;
+}
+.login-card .btn-auth.primary:hover,
+.register-card .btn-auth.primary:hover {
+    background: #2a2a2a !important;
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45) !important;
+    background-position: center !important;
+}
+.btn-tao-phong:hover,
+.lib-btn-new:hover,
+.btn-tdt:hover,
+.btn-primary-sm:hover,
+.btn-filter:hover,
+.btn-them-tat-ca:hover,
+.btn-auth.primary:hover,
+.btn-primary:hover {
+    color: #fff !important;
+    transform: translateY(-2px);
+    background-position: right center !important;
+    box-shadow: 0 12px 26px rgba(37, 99, 235, 0.45);
+}
+.btn-tao-phong:active,
+.lib-btn-new:active,
+.btn-tdt:active,
+.btn-primary-sm:active,
+.btn-filter:active,
+.btn-them-tat-ca:active,
+.btn-auth.primary:active,
+.btn-primary:active {
+    transform: translateY(0) scale(0.99);
+}
+
+/* Nút bị vô hiệu hoá: mờ đi, không nhấc/không lóe sáng/không đổi con trỏ */
+.btn:disabled,
+.btn-tao-phong:disabled,
+.lib-btn-new:disabled,
+.btn-tdt:disabled,
+.btn-primary-sm:disabled,
+.btn-filter:disabled,
+.btn-primary:disabled,
+.btn-back:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+    filter: grayscale(0.15);
+}
+.btn-tdt:disabled::before,
+.lib-btn-new:disabled::before,
+.btn-filter:disabled::before,
+.btn-primary:disabled::before { display: none; }
+
+/* Vệt sáng quét chéo cho các nút chính CHƯA có hiệu ứng này
+   (trang không định nghĩa ::before nên không ghi đè được -> luôn hiển thị).
+   .btn-tao-phong tự có ::before riêng; nhóm btn-auth.primary/-sm/them-tat-ca đã
+   có vệt sáng qua ::after trong ui-enhance.css nên không thêm để tránh quét đôi. */
+.lib-btn-new::before,
+.btn-tdt::before,
+.btn-filter::before,
+.btn-primary::before {
+    content: ''; position: absolute; top: 0; left: -120%;
+    width: 55%; height: 100%; pointer-events: none;
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+    transform: skewX(-20deg);
+    transition: left 0.6s var(--ease);
+}
+.lib-btn-new:hover::before,
+.btn-tdt:hover::before,
+.btn-filter:hover::before,
+.btn-primary:hover::before { left: 135%; }
+
+/* Icon nhúc nhích khi rê chuột (đồng nhất cảm giác "sống động" với nút Tạo phòng) */
+.lib-btn-new i,
+.btn-tdt i,
+.btn-filter i,
+.btn-primary i,
+.btn-primary-sm i,
+.btn-them-tat-ca i,
+.btn-auth.primary i {
+    display: inline-block;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.lib-btn-new:hover i,
+.btn-tdt:hover i,
+.btn-filter:hover i,
+.btn-primary:hover i,
+.btn-primary-sm:hover i,
+.btn-them-tat-ca:hover i,
+.btn-auth.primary:hover i {
+    transform: scale(1.18) rotate(-8deg);
+}
+
+/* =========================================================
+   3) NÚT PHỤ / VIỀN — đồng nhất hover & viền
+   ========================================================= */
+.btn-ghost-sm,
+.btn-back,
+.btn-outline-secondary,
+.btn-outline-primary,
+.btn-outline-light,
+.btn-secondary {
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-weight: 600;
+    transition: transform 0.2s var(--ease),
+                border-color 0.2s var(--ease),
+                color 0.2s var(--ease),
+                background 0.2s var(--ease),
+                box-shadow 0.2s var(--ease);
+}
+.btn-ghost-sm:hover,
+.btn-back:hover,
+.btn-outline-secondary:hover,
+.btn-outline-primary:hover,
+.btn-outline-light:hover,
+.btn-secondary:hover {
+    border-color: var(--primary);
+    color: var(--primary-dark);
+    background: var(--primary-softer);
+    transform: translateY(-1px);
+}
+/* Icon nhúc nhích ở nút phụ */
+.btn-back i,
+.btn-ghost-sm i {
+    display: inline-block;
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.btn-back:hover i,
+.btn-ghost-sm:hover i { transform: scale(1.15); }
+
+/* =========================================================
+   4) Hành vi chung cho mọi .btn + vòng focus dễ tiếp cận
+   ========================================================= */
+.btn {
+    font-weight: 600;
+    transition: transform 0.18s var(--ease),
+                box-shadow 0.2s var(--ease),
+                background 0.2s var(--ease),
+                filter 0.2s var(--ease);
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+
+.btn:focus-visible,
+.btn-tao-phong:focus-visible,
+.lib-btn-new:focus-visible,
+.btn-tdt:focus-visible,
+.btn-primary-sm:focus-visible,
+.btn-ghost-sm:focus-visible,
+.btn-filter:focus-visible,
+.btn-auth:focus-visible,
+.btn-act:focus-visible,
+.lib-subtab-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.28);
+}
+/* Pills không cần ring vuông khi focus */
+.custom-pills .nav-link:focus-visible,
+.custom-pills .nav-link:focus,
+.lib-subtab-btn:focus-visible,
+.lib-subtab-btn:focus {
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Tôn trọng người dùng tắt chuyển động */
+@media (prefers-reduced-motion: reduce) {
+    .btn, .btn-tao-phong, .lib-btn-new, .btn-tdt, .btn-primary-sm,
+    .btn-filter, .btn-them-tat-ca, .btn-auth.primary, .btn-primary,
+    .btn-ghost-sm, .btn-outline-secondary, .btn-outline-light {
+        transition: none !important;
+    }
+    .btn:hover, .btn-primary:hover, .btn-tao-phong:hover { transform: none; }
+}

@@ -1,0 +1,17 @@
+<div class="auth-contact">
+    <a href="tel:0369548619"><i class="fas fa-phone"></i> 0369 548 619</a>
+    <span class="sep">·</span>
+    <a href="mailto:Fathoang2311@gmail.com"><i class="fas fa-envelope"></i> Fathoang2311@gmail.com</a>
+</div>
+<style>
+    .auth-contact {
+        position: fixed; left: 0; right: 0; bottom: 14px; z-index: 5;
+        display: flex; gap: 12px; flex-wrap: wrap;
+        align-items: center; justify-content: center;
+        padding: 0 16px; font-size: .78rem; color: #1a1a1a;
+    }
+    .auth-contact a { color: #1a1a1a; text-decoration: none; opacity: .85; }
+    .auth-contact a:hover { text-decoration: underline; opacity: 1; }
+    .auth-contact .sep { opacity: .5; }
+    @media (max-width: 480px) { .auth-contact .sep { display: none; } }
+</style>

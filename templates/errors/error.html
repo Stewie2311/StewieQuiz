@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ code }} · {{ title }}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/controls.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/square.css') }}">
+    <style>
+        :root { --blue: #2563eb; --blue-dark: #1d4ed8; --ink: #1e293b; --muted: #64748b; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); color: var(--ink); padding: 24px;
+        }
+        .err-card {
+            background: #fff; border-radius: 20px; padding: 48px 40px; max-width: 480px; width: 100%;
+            text-align: center; box-shadow: 0 20px 50px rgba(37, 99, 235, .15);
+        }
+        .err-code {
+            font-size: 84px; font-weight: 800; line-height: 1;
+            background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .err-icon { font-size: 40px; color: var(--blue); margin-bottom: 8px; }
+        .err-title { font-size: 22px; font-weight: 700; margin: 12px 0 8px; }
+        .err-msg { color: var(--muted); font-size: 15px; line-height: 1.6; margin-bottom: 28px; }
+        .err-btn {
+            display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+            background: var(--blue); color: #fff; padding: 12px 24px; border-radius: 12px;
+            font-weight: 600; transition: background .2s, transform .2s;
+        }
+        .err-btn:hover { background: var(--blue-dark); transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+    <div class="err-card">
+        <div class="err-icon"><i class="fas fa-triangle-exclamation"></i></div>
+        <div class="err-code">{{ code }}</div>
+        <div class="err-title">{{ title }}</div>
+        <p class="err-msg">{{ message }}</p>
+        <a class="err-btn" href="/"><i class="fas fa-house"></i> Về trang chủ</a>
+    </div>
+</body>
+</html>

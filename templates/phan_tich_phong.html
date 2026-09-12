@@ -1,0 +1,260 @@
+{#
+  phan_tich_phong.html — THỐNG KÊ KẾT QUẢ theo danh sách lớp.
+
+  Khác trang lịch sử phòng ở một điểm quan trọng: bảng này lấy DANH SÁCH LỚP làm
+  gốc, nên sinh viên VẮNG vẫn có một dòng và nhận điểm 0. Đây mới là bảng điểm
+  nộp được cho khoa — chỉ liệt kê người đã thi thì người vắng biến mất khỏi bảng
+  và không ai biết họ đã bỏ thi.
+#}
+{% extends 'base.html' %}
+
+{% block title %}Thống kê - {{ phong.ten_phong }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Font giống trang Đăng nhập + đồng nhất cỡ chữ 0.8rem toàn trang */
+    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
+    .pt-page { font-family: 'Be Vietnam Pro', 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif; }
+    .pt-page, .pt-page *:not(.pt-bigic) { font-size: 0.8rem !important; }
+
+    .pt-page { max-width: 1340px; margin: 0 auto; }
+
+    /* Bố cục 2 cột: thông tin trái, danh sách phải (2 cột bắt đầu cùng 1 đỉnh) */
+    .pt-layout { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; }
+    .pt-side { position: sticky; top: 16px; }
+    @media (max-width: 992px) { .pt-layout { grid-template-columns: 1fr; } .pt-side { position: static; } }
+
+    /* Card trắng liền mạch bên trái */
+    .pt-side-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 16px; box-shadow: 0 10px 30px rgba(15,23,42,.08); }
+
+    .ri-grid { display: grid; grid-template-columns: 1fr; gap: 1px; background: #e2e8f0; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+    .ri-cell { background: #fff; padding: 10px 14px; min-height: 48px; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+    .ri-label { color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; display: flex; align-items: center; gap: 5px; }
+    .ri-label i { color: #94a3b8; }
+    .ri-value { color: #0f172a; font-weight: 700; }
+    .ri-value.red { color: #dc2626; }
+    .ri-value.orange { color: #ea580c; }
+
+    /* Sơ đồ tròn phân loại học lực */
+    .pt-chart-card { margin-top: 14px; }
+    .pt-chart-title { font-weight: 800; color: #0f172a; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+    .pt-chart-title i { color: #2563eb; }
+    .pt-chart-box { position: relative; height: 200px; }
+    .pt-chart-empty { text-align: center; color: #94a3b8; padding: 30px 10px; }
+
+    /* Tabs lọc theo lớp */
+    .lop-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .lop-tab {
+        background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; cursor: pointer;
+        padding: 7px 14px; font-weight: 700; border-radius: 9px !important;
+        transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+    .lop-tab:hover { background: #e8eefc; color: #2563eb; }
+    .lop-tab.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .lop-tab .cnt { opacity: .7; font-weight: 600; }
+
+    /* Bảng danh sách sinh viên */
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; box-shadow: 0 10px 30px rgba(15,23,42,.08); }
+    @keyframes ptFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .pt-fade { animation: ptFade 0.22s ease; }
+    .st-table { width: 100%; border-collapse: collapse; }
+    .st-table thead th { text-align: left; color: #475569; font-weight: 700; padding: 9px 12px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+    .st-table tbody td { padding: 9px 12px; border-bottom: 1px solid #eef2f7; color: #334155; white-space: nowrap; }
+    .st-table tbody tr:last-child td { border-bottom: none; }
+    .st-table tbody tr:hover td { background: #f8fafc; }
+    .st-tag { display: inline-block; background: #f1f5f9; border: 1px solid #e2e8f0; color: #0f172a; border-radius: 6px !important; padding: 1px 7px; font-weight: 700; }
+    .diem-badge { display: inline-block; min-width: 42px; text-align: center; border-radius: 7px !important; padding: 3px 10px; font-weight: 800; }
+    .diem-badge.pass { background: #dcfce7; color: #15803d; }
+    .diem-badge.fail { background: #fee2e2; color: #b91c1c; }
+    .muted { color: #94a3b8; }
+
+    /* Nhãn trạng thái */
+    .st-badge { display: inline-block; border-radius: 7px !important; padding: 3px 9px; font-weight: 700; }
+    .st-badge.nop   { background: #dcfce7; color: #15803d; }
+    .st-badge.comat { background: #fef9c3; color: #a16207; }
+    .st-badge.vang  { background: #fee2e2; color: #b91c1c; }
+    .st-badge.canh  { background: #ffedd5; color: #c2410c; margin-left: 4px; }
+
+    .pt-empty { text-align: center; padding: 60px 20px; color: #64748b; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; }
+
+    @media print {
+        .navbar-custom, .stewie-navbar, footer { display: none !important; }
+        .pt-layout { grid-template-columns: 1fr; }
+        .pt-side { position: static; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pt-page">
+
+    {% if stats.tong_sv == 0 %}
+        <div class="pt-empty">
+            <i class="fas fa-clipboard-list pt-bigic" style="font-size:2.6rem;opacity:.4;"></i>
+            <h3 style="margin-top:14px;">Chưa có dữ liệu / chưa gán lớp cho phòng</h3>
+        </div>
+    {% else %}
+
+    <div class="pt-layout">
+        <!-- BÊN TRÁI: card thông tin + sơ đồ tròn -->
+        <aside class="pt-side">
+            <div class="pt-side-card">
+                <div class="ri-grid">
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-door-open"></i> Tên phòng</div>
+                        <div class="ri-value">{{ phong.ten_phong }}</div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-book"></i> Tên môn</div>
+                        <div class="ri-value">{{ phong.ten_mon }}</div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-users"></i> Tổng số sinh viên</div>
+                        <div class="ri-value">{{ stats.tong_sv }}</div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-user-slash"></i> Vắng</div>
+                        <div class="ri-value red">{{ stats.vang }}</div>
+                    </div>
+                    <div class="ri-cell">
+                        <div class="ri-label"><i class="fas fa-triangle-exclamation"></i> Bị cảnh báo vi phạm</div>
+                        <div class="ri-value orange">{{ stats.canh_bao }}</div>
+                    </div>
+                </div>
+
+                <div class="pt-chart-card">
+                    <h3 class="pt-chart-title"><i class="fas fa-chart-pie"></i>Phân loại học lực</h3>
+                    {% if (stats.gioi + stats.kha + stats.tb) > 0 %}
+                        <div class="pt-chart-box"><canvas id="chartHocLuc"></canvas></div>
+                    {% else %}
+                        <div class="pt-chart-empty"><i class="fas fa-chart-pie" style="opacity:.4;"></i><br>Chưa có bài nộp để phân loại</div>
+                    {% endif %}
+                </div>
+            </div>
+        </aside>
+
+        <!-- BÊN PHẢI: tabs lọc theo lớp + bảng danh sách theo lớp -->
+        <main>
+            <div class="lop-tabs">
+                <button type="button" class="lop-tab active" data-lop="">Tất cả các lớp</button>
+                {% for lop in lop_list %}
+                <button type="button" class="lop-tab" data-lop="{{ lop.ten_lop }}">
+                    {{ lop.ten_lop }} <span class="cnt">({{ lop.si_so }})</span>
+                </button>
+                {% endfor %}
+            </div>
+
+            <div class="card">
+                <div id="stWrap">
+                    <table class="st-table">
+                        <thead>
+                            <tr>
+                                <th style="width:48px;">STT</th>
+                                <th>Họ và tên</th>
+                                <th>Mã số sinh viên</th>
+                                <th>Lớp học</th>
+                                <th>Mã đề</th>
+                                <th>Thời gian làm bài</th>
+                                <th>Số câu đúng</th>
+                                <th>Điểm số</th>
+                                <th>Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hs in all_hs %}
+                            <tr class="st-row" data-lop="{{ hs.lop }}">
+                                <td class="muted st-stt">{{ loop.index }}</td>
+                                <td style="font-weight:700;color:#0f172a;">{{ hs.ho_ten }}</td>
+                                <td class="muted">{{ hs.ma_so_sv or '—' }}</td>
+                                <td>{{ hs.lop }}</td>
+                                <td>{% if hs.ma_de and hs.ma_de != '—' %}<span class="st-tag">{{ hs.ma_de }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+                                <td>{{ hs.tg_lam }}</td>
+                                <td>
+                                    {% if hs.da_nop_bai %}
+                                        <strong style="color:#0f172a;">{{ hs.so_cau_dung }}</strong><span class="muted"> / {{ hs.tong_so_cau }}</span>
+                                    {% elif hs.trang_thai == 'vang' %}
+                                        0
+                                    {% else %}
+                                        <span class="muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if hs.da_nop_bai or hs.trang_thai == 'vang' %}
+                                        <span class="diem-badge {{ 'pass' if hs.diem >= dat_nguong else 'fail' }}">{{ hs.diem }}</span>
+                                    {% else %}
+                                        <span class="muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if hs.trang_thai == 'vang' %}
+                                        <span class="st-badge vang">Vắng</span>
+                                    {% elif hs.da_nop_bai %}
+                                        <span class="st-badge nop">Đã nộp</span>
+                                    {% else %}
+                                        <span class="st-badge comat">Có mặt</span>
+                                    {% endif %}
+                                    {% if hs.canh_bao %}<span class="st-badge canh"><i class="fas fa-triangle-exclamation"></i> Vi phạm</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if stats.tong_sv > 0 %}
+{% if (stats.gioi + stats.kha + stats.tb) > 0 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+    new Chart(document.getElementById('chartHocLuc'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Giỏi', 'Khá', 'Trung bình'],
+            datasets: [{
+                data: [{{ stats.gioi }}, {{ stats.kha }}, {{ stats.tb }}],
+                backgroundColor: ['#16a34a', '#2563eb', '#f59e0b'],
+                borderWidth: 2, borderColor: '#fff',
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, cutout: '58%',
+            plugins: { legend: { position: 'bottom', labels: { padding: 12, font: { size: 11 } } } }
+        }
+    });
+</script>
+{% endif %}
+<script>
+    // Lọc bảng theo lớp — mượt, không tải lại trang
+    (function () {
+        const tabs = document.querySelectorAll('.lop-tab');
+        const rows = Array.from(document.querySelectorAll('.st-row'));
+        const wrap = document.getElementById('stWrap');
+        if (!tabs.length || !wrap) return;
+
+        function loc(lop) {
+            let i = 0;
+            rows.forEach(function (r) {
+                const show = !lop || r.dataset.lop === lop;
+                r.style.display = show ? '' : 'none';
+                if (show) { i++; const c = r.querySelector('.st-stt'); if (c) c.textContent = i; }
+            });
+            wrap.classList.remove('pt-fade'); void wrap.offsetWidth; wrap.classList.add('pt-fade');
+        }
+
+        tabs.forEach(function (t) {
+            t.addEventListener('click', function () {
+                tabs.forEach(function (x) { x.classList.toggle('active', x === t); });
+                loc(t.dataset.lop);
+            });
+        });
+    })();
+</script>
+{% endif %}
+{% endblock %}

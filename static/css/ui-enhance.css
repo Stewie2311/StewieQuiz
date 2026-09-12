@@ -1,0 +1,88 @@
+/* ==========================================================
+   NÂNG CẤP HIỆU ỨNG GIAO DIỆN (cao cấp) — dùng chung toàn hệ thống
+   - Chuyển tab: nội dung con đổ xuống lần lượt (cascade) + xoá blur
+   - Ripple khi click, press khi nhấn nút
+   - Vệt sáng quét trên nút chính, đếm số động cho thống kê
+   ========================================================== */
+
+/* ---- Khi đổi tab, cả khối chỉ mờ nhẹ; phần "xịn" là các item con cascade ---- */
+.tabs-container > .tab-pane.active {
+    animation: paneFade 0.3s ease both;
+}
+@keyframes paneFade { from { opacity: 0; } to { opacity: 1; } }
+
+.tab-content > .tab-pane.show.active {
+    animation: paneFade 0.3s ease both;
+}
+
+/* ---- Item con xuất hiện: trượt lên + phóng nhẹ + xoá nhoè (delay gắn bằng JS) ---- */
+.ui-rise {
+    animation: uiRise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: transform, opacity, filter;
+}
+@keyframes uiRise {
+    from { opacity: 0; transform: translateY(22px) scale(0.97); filter: blur(6px); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);    filter: blur(0); }
+}
+
+/* ---- Hiệu ứng gợn sóng khi click ---- */
+.nav-link, .btn, .btn-auth, .pf-tab-btn, .btn-act, .nav-pills .nav-link {
+    position: relative;
+    overflow: hidden;
+}
+.ui-ripple {
+    position: absolute; border-radius: 50%;
+    background: currentColor; opacity: 0.22;
+    transform: scale(0); pointer-events: none;
+    animation: uiRipple 0.6s ease-out forwards;
+}
+@keyframes uiRipple { to { transform: scale(2.4); opacity: 0; } }
+
+/* ---- Phản hồi khi nhấn nút (lún nhẹ) ---- */
+.btn, .btn-auth, .btn-act, .pf-tab-btn, .btn-primary-sm {
+    transition: transform 0.12s ease, box-shadow 0.22s ease,
+                background 0.22s ease, color 0.22s ease;
+}
+.btn:active, .btn-auth:active, .btn-act:active,
+.pf-tab-btn:active, .btn-primary-sm:active {
+    transform: translateY(1px) scale(0.98);
+}
+
+/* ---- Vệt sáng quét trên nút hành động chính ---- */
+.btn-auth.primary, .btn-primary-sm, .btn-them-tat-ca {
+    position: relative; overflow: hidden;
+}
+.btn-auth.primary::after, .btn-primary-sm::after, .btn-them-tat-ca::after {
+    content: ''; position: absolute; top: 0; left: -160%;
+    width: 55%; height: 100%; pointer-events: none;
+    background: linear-gradient(120deg, transparent, rgba(255,255,255,0.45), transparent);
+    transform: skewX(-20deg);
+}
+.btn-auth.primary:hover::after, .btn-primary-sm:hover::after, .btn-them-tat-ca:hover::after {
+    animation: uiShine 0.85s ease;
+}
+@keyframes uiShine { to { left: 160%; } }
+
+/* ---- Nav pill mượt + hàng bảng nổi nhẹ khi rê chuột ---- */
+.custom-pills .nav-link, .nav-pills .nav-link {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.data-table tbody tr { transition: background 0.2s ease; }
+.data-table tbody tr:hover { background: var(--primary-softer, #eff6ff); }
+
+/* ---- Hover thẻ: nâng + viền sáng ---- */
+.room-card-sys, .section-card {
+    transition: transform 0.3s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.room-card-sys:hover, .section-card:hover {
+    box-shadow: 0 18px 40px rgba(37, 99, 235, 0.16);
+}
+
+/* Tôn trọng người dùng tắt chuyển động */
+@media (prefers-reduced-motion: reduce) {
+    .tabs-container > .tab-pane.active,
+    .tab-content > .tab-pane.show.active,
+    .ui-rise, .ui-ripple { animation: none !important; filter: none !important; }
+    .btn:active, .btn-auth:active, .btn-act:active { transform: none; }
+    .btn-auth.primary::after, .btn-primary-sm::after, .btn-them-tat-ca::after { display: none; }
+}

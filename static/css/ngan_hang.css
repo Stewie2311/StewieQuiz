@@ -1,0 +1,341 @@
+/* =====================================================================
+   ngan_hang.css — Style dùng chung cho NỘI DUNG Ngân hàng câu hỏi.
+   Nạp toàn cục (base.html) để dùng được ở CẢ trang /ngan_hang độc lập
+   LẪN pane "Ngân hàng câu hỏi" gộp trong tab Thư viện (nạp qua AJAX).
+   ===================================================================== */
+
+/* BỘ LỌC TÌM KIẾM */
+.filter-bar {
+    background: #f8fafc; border: 1px solid #f1f5f9;
+    border-radius: 16px; padding: 20px; margin-bottom: 16px;
+}
+
+/* Thanh công cụ + ô "Số môn"/"Môn học" — định nghĩa ở đây để trang /ngan_hang
+   ĐỘC LẬP cũng có (library-section.html chỉ áp cho pane trong Thư viện). */
+.lib-filter-bar { background: #f8fafc; border: 1px solid #f1f5f9;
+    border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+.lib-so-mon { display: flex; align-items: center; gap: 8px; height: 42px;
+    background: var(--primary-softer); border-color: rgba(37,99,235,0.25);
+    color: var(--primary); font-weight: 800; white-space: nowrap; }
+
+/* Nút Tải Excel (xanh lá) — cao 42px cho thẳng hàng thanh công cụ */
+.nh-btn-excel { display: inline-flex; align-items: center; gap: 6px; height: 42px; padding: 0 16px;
+    border: none; border-radius: 10px; font-weight: 700; cursor: pointer; text-decoration: none;
+    background: linear-gradient(135deg,#16a34a,#22c55e); color: #fff; white-space: nowrap;
+    box-shadow: 0 6px 16px rgba(22,163,74,0.25); transition: all .2s ease; }
+.nh-btn-excel:hover { transform: translateY(-2px); color: #fff; box-shadow: 0 10px 22px rgba(22,163,74,0.32); }
+
+/* Bảng danh sách môn: chỉ tô nền khi rê chuột (xem chi tiết bằng nút "Xem") */
+.nh-mon-clickable tbody tr { transition: background .15s ease; }
+.nh-mon-clickable tbody tr:hover { background: var(--primary-softer); }
+/* Cột Thao tác bảng môn: icon Excel gọn (xanh lá) — dùng cả trang /ngan_hang độc lập */
+.nh-mon-table .tbl-actions .btn-act.icon-only {
+    width: 34px; height: 34px; padding: 0; justify-content: center; font-size: 0.9rem; }
+.nh-mon-table .btn-act.btn-excel { color: #16a34a; }
+.nh-mon-table .btn-act.btn-excel:hover { background: rgba(22,163,74,0.12); border-color: rgba(22,163,74,0.4); color: #16a34a; }
+
+/* Thanh lọc: flex, các control thẳng hàng đáy, gọn gàng */
+.nh-filter-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.nh-filter-form .form-control-dark { width: 100%; height: 42px; padding-top: 0; padding-bottom: 0; }
+.nh-field { display: flex; flex-direction: column; gap: 4px; }
+.nh-field-grow { flex: 1 1 200px; min-width: 160px; }
+.nh-field-sm  { flex: 0 0 128px; }            /* Chương gọn vừa đủ */
+.nh-field-xs  { flex: 0 0 106px; }            /* Độ khó gọn hơn nữa */
+
+/* Ô tìm kiếm thu gọn: chỉ ICON kính lúp đứng yên, click -> ô nhập kéo dài sang TRÁI.
+   Ô nhập định vị tuyệt đối nên KHÔNG đẩy layout, icon GIỮ NGUYÊN vị trí. */
+.nh-search { position: relative; display: inline-flex; align-items: center; }
+.nh-search-chk { display: none; }
+.nh-search-icon {
+    width: 42px; height: 42px; flex: 0 0 auto; margin: 0; position: relative; z-index: 2;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border-strong); border-radius: 10px;
+    background: #fff; color: var(--text-secondary); cursor: pointer;
+    transition: background .15s, color .15s;
+}
+.nh-search-icon:hover { background: var(--primary-softer); color: var(--primary-dark); }
+.nh-search-input {
+    position: absolute; top: 0; right: 0; z-index: 1;
+    width: 0; min-width: 0; height: 42px; padding: 0;
+    border: 1px solid transparent; border-radius: 10px; background: #fff; color: #0f172a;
+    opacity: 0; pointer-events: none;
+    transition: width .25s ease, opacity .2s ease, padding .2s ease;
+}
+.nh-search-chk:checked ~ .nh-search-input {
+    width: 240px; opacity: 1; pointer-events: auto;
+    padding: 0 50px 0 14px;   /* chừa chỗ cho icon bên phải */
+    border-color: var(--border-strong);
+}
+
+/* Trong THANH LỌC CHI TIẾT (mức 2): ô tìm kiếm mở IN-FLOW (nằm sau icon, đẩy
+   nút Lọc/tự xuống dòng nhờ flex-wrap) thay vì phủ tuyệt đối lên Chương/Độ khó
+   bên trái. Riêng search ở danh sách Môn (mức 1) vẫn nở sang trái như cũ. */
+.nh-filter-form .nh-search { gap: 6px; }
+.nh-filter-form .nh-search-input { position: static; }
+.nh-filter-form .nh-search-chk:checked ~ .nh-search-input { padding: 0 14px; }
+
+/* Nút Lọc: cùng chiều cao, thẳng hàng, không lệch */
+.nh-filter-btn {
+    flex: 0 0 auto; height: 42px; padding: 0 16px; border: none;
+    border-radius: 10px; cursor: pointer; font-weight: 700;
+    background: var(--grad-primary); color: #fff; box-shadow: var(--shadow-primary);
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.nh-filter-btn:hover { filter: brightness(1.05); }
+
+/* Combobox: nền trắng, chữ tối cho dễ đọc (đồng bộ theme sáng) */
+select.form-control-dark option { background-color: #ffffff; color: #0f172a; }
+select.form-control-dark:focus  { background-color: #ffffff; color: #0f172a; }
+
+/* CARD CÂU HỎI */
+.q-card {
+    background: #ffffff; border: 1px solid #e2e8f0;
+    border-radius: 16px; margin-bottom: 16px; overflow: hidden; transition: all 0.3s;
+}
+.q-card:hover { border-color: rgba(37,99,235,0.35); box-shadow: 0 5px 20px rgba(37,99,235,0.12); }
+/* flex-wrap + gap: thiếu 2 thuộc tính này nên trên ĐIỆN THOẠI các nhãn
+   (Môn · Chương · Độ khó · Đóng góp) bị ép chung MỘT HÀNG, chữ bị bóp/tràn. */
+.q-card-header {
+    padding: 12px 20px; display: flex; justify-content: space-between;
+    align-items: center; flex-wrap: wrap; gap: 8px 12px;
+    border-bottom: 1px solid #f1f5f9; background: #f8fafc;
+}
+/* Hai cụm bên trong header cũng phải được xuống dòng khi chật */
+.q-card-header > .d-flex { flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
+.q-card-body { padding: 20px; }
+
+.badge-chuong { background: #dbeafe; color: #1d4ed8; padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; display: inline-block;}
+.badge-de  { background:rgba(56,239,125,0.15); color:#16a34a; padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; display: inline-block;}
+.badge-tb  { background:rgba(255,193,7,0.15); color:#d97706; padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; display: inline-block;}
+.badge-kho { background:rgba(255,107,107,0.15); color:#dc2626; padding: 4px 11px; border-radius: 6px; font-size: 0.95rem; font-weight: 700; display: inline-block;}
+
+.opt-view {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 14px; border-radius: 10px; margin-bottom: 0; height: 100%;
+    background: #ffffff; border: 1px solid #e2e8f0;
+}
+.opt-view.correct { background: rgba(56,239,125,0.08); border-color: rgba(56,239,125,0.3); }
+.opt-letter {
+    width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.8rem; background: #e2e8f0; color: #64748b; flex-shrink: 0;
+}
+.opt-view.correct .opt-letter { background: rgba(56,239,125,0.2); color: #16a34a; }
+.opt-view.correct .opt-text { color: #16a34a; font-weight: 600; }
+.correct-mark { margin-left: auto; color: #16a34a; font-size: 0.75rem; display: flex; align-items: center; gap: 4px; }
+
+/* Nút xóa câu khỏi ngân hàng (chỉ hiện với người đóng góp / admin) */
+.btn-xoa-nh {
+    width: 30px; height: 30px; border-radius: 8px; border: 1px solid #e2e8f0;
+    background: #ffffff; color: #94a3b8; cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; transition: all 0.18s ease;
+}
+.btn-xoa-nh:hover { border-color: #dc2626; color: #dc2626; background: rgba(220,38,38,0.06); }
+.btn-xoa-nh:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+/* =====================================================================
+   SƠ ĐỒ THỐNG KÊ + BẢNG HIỆN ĐẠI — DÙNG CHUNG cho mọi trang Thư viện
+   (Câu hỏi / Ngân hàng / Tài liệu...). Đặt ở file global này để trang
+   /ngan_hang ĐỘC LẬP và pane trong Thư viện hiển thị y hệt nhau.
+   ===================================================================== */
+
+/* ---- Bố cục: panel thống kê (trái) + bảng auto-fit (phải) ---- */
+.lib-split { display: flex; align-items: flex-start; gap: 18px; }
+.lib-split .lib-table-wrap { flex: 1 1 auto; min-width: 0; }
+.lib-table-fit { width: 100%; table-layout: auto; }
+.lib-table-wrap { box-shadow: 0 6px 20px rgba(15, 23, 42, .06); }
+
+/* ---- Panel thống kê (trái) ---- */
+.lib-stats {
+    flex: 0 0 250px; align-self: stretch;
+    background: var(--surface); border: 1px solid var(--table-border);
+    border-radius: 10px !important; padding: 18px; box-shadow: var(--shadow-sm);
+}
+.lib-stats .lst-title {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 800; color: #0f172a; font-size: 0.95rem; margin-bottom: 16px;
+}
+.lib-stats .lst-title i { color: var(--primary); }
+.lib-stats .lst-nums { display: flex; gap: 10px; margin-bottom: 18px; }
+.lib-stats .lst-num {
+    flex: 1; text-align: center; background: var(--primary-softer);
+    border: 1px solid rgba(37,99,235,0.15); border-radius: 12px; padding: 12px 6px;
+}
+.lib-stats .lst-num b { display: block; font-size: 1.5rem; font-weight: 900; color: var(--primary); line-height: 1; }
+.lib-stats .lst-num span { font-size: 0.72rem; color: var(--text-muted); font-weight: 600; }
+.lib-stats .lst-sub { font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 10px; }
+
+/* ---- Biểu đồ thanh ngang ---- */
+.lib-stats .lst-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.lib-stats .lst-bar-name { width: 28px; flex-shrink: 0; font-size: 0.76rem; font-weight: 800; }
+.lib-stats .lst-track { flex: 1; height: 10px; background: #eef2f7; border-radius: 999px; overflow: hidden; }
+.lib-stats .lst-fill { display: block; height: 100%; width: var(--w, 0); border-radius: 999px; }
+.lib-stats.animate .lst-fill { animation: lstBarGrow .9s var(--ease) both; }
+@keyframes lstBarGrow { from { width: 0; } to { width: var(--w, 0); } }
+.lib-stats .lst-bar-val { width: 26px; flex-shrink: 0; text-align: right; font-size: 0.78rem; font-weight: 800; color: #475569; }
+
+/* Tông màu độ khó dùng chung (panel + ô mini trong bảng) */
+.dk-de-t { color: #16a34a; } .dk-tb-t { color: #d97706; } .dk-kho-t { color: #dc2626; }
+.lst-fill.dk-de  { background: linear-gradient(90deg,#34d399,#22c55e); }
+.lst-fill.dk-tb  { background: linear-gradient(90deg,#fbbf24,#f59e0b); }
+.lst-fill.dk-kho { background: linear-gradient(90deg,#f87171,#ef4444); }
+/* Thanh trung tính (vd: top tài liệu theo dung lượng) */
+.lst-fill.dk-neutral { background: linear-gradient(90deg,#60a5fa,#2563eb); }
+
+/* ---- Biểu đồ TRÒN (donut) SVG + hiệu ứng vẽ dần ---- */
+.lst-donut-wrap { display: flex; justify-content: center; margin: 4px 0 16px; }
+.lst-donut { width: 150px; height: 150px; overflow: visible; }
+.lst-donut circle { fill: none; stroke-width: 13; }
+.lst-donut-track { stroke: #eef2f7; }
+.lst-seg {
+    stroke-linecap: butt;
+    transform-box: fill-box; transform-origin: center;
+    stroke-dashoffset: 0;
+    filter: drop-shadow(0 2px 3px rgba(15,23,42,.12));
+}
+.lst-seg.seg-de  { stroke: #22c55e; }
+.lst-seg.seg-tb  { stroke: #f59e0b; }
+.lst-seg.seg-kho { stroke: #ef4444; }
+.lib-stats.animate .lst-seg { animation: lstDonutDraw .85s var(--ease) both; }
+@keyframes lstDonutDraw { from { stroke-dashoffset: var(--len, 0); } to { stroke-dashoffset: 0; } }
+.lst-donut-num { text-anchor: middle; dominant-baseline: middle;
+    font-size: 21px; font-weight: 900; fill: #0f172a; }
+.lst-donut-cap { text-anchor: middle; dominant-baseline: middle;
+    font-size: 8px; font-weight: 600; fill: #94a3b8; }
+.lst-donut:hover { animation: lstDonutPulse .5s var(--ease); }
+@keyframes lstDonutPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+.lib-stats.animate .lst-num b { animation: lstPop .5s var(--ease) both; }
+@keyframes lstPop { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .lib-stats.animate .lst-fill,
+    .lib-stats.animate .lst-seg,
+    .lib-stats.animate .lst-num b { animation: none !important; }
+}
+
+/* Màn hẹp: panel xuống trên, bảng xuống dưới */
+@media (max-width: 900px) {
+    .lib-split { flex-direction: column; }
+    .lib-stats { flex-basis: auto; width: 100%; }
+}
+
+/* =====================================================================
+   BẢNG HIỆN ĐẠI (.lib-table-modern): bỏ kẻ ô dọc (chỉ kẻ ngang nhạt),
+   header có nền tách bạch, cột chính in đậm, số liệu là pill mềm,
+   nút thao tác icon tối giản. (Mẫu lấy từ bảng "Câu hỏi của tôi".)
+   ===================================================================== */
+.lib-table-modern.data-table th,
+.lib-table-modern.data-table tbody td { border: none; }
+.lib-table-modern.data-table tbody td { border-bottom: 1px solid #eef2f7; }
+.lib-table-modern.data-table tbody tr:last-child td { border-bottom: none; }
+.lib-table-modern.data-table thead th {
+    background: #f1f5f9;
+    color: #64748b;
+    font-weight: 700;
+    font-size: 0.82rem;
+    letter-spacing: 0.2px;
+    padding: 14px 18px;
+    border-bottom: 1px solid #e2e8f0;
+}
+.lib-table-modern.data-table tbody td { padding: 5px 7px; color: #3b3e44; font-size: 0.8rem; }
+.lib-table-modern.data-table thead th { padding: 5px 7px; color: #555b65; font-size: 0.8rem; font-weight: 600; }
+.lib-table-modern.data-table tbody tr { transition: background .15s ease; }
+.lib-table-modern.data-table tbody tr:hover { background: #f8fafc; }
+.lib-table-modern .col-primary { font-weight: 600; color: #3b3e44; font-size: 0.8rem; }
+.lib-table-modern .col-muted { color: #3b3e44; font-weight: 500; font-size: 0.8rem; }
+.lib-table-modern .badge-count {
+    display: inline-block !important; min-width: 0 !important;
+    padding: 1px 6px !important; border: none !important;
+    background: #eff6ff !important; color: #1d4ed8 !important;
+    border-radius: 999px !important; font-weight: 600 !important; font-size: 0.8rem !important;
+}
+.lib-table-modern .tbl-actions { opacity: 0 !important; gap: 4px; transition: opacity 0.18s ease; }
+.lib-table-modern tbody tr:hover .tbl-actions,
+.lib-table-modern tbody tr:focus-within .tbl-actions { opacity: 1 !important; }
+.lib-table-modern .btn-act.icon-only {
+    width: 30px; height: 30px; padding: 0; justify-content: center;
+    font-size: 0.8rem;
+}
+.lib-table-modern .btn-act.icon-only:hover { transform: translateY(-1px); filter: brightness(0.92); }
+/* Màu từng nút — mặc định nền nhạt, hover -> nền đậm lên rõ rệt */
+.lib-table-modern .btn-act.btn-excel    { color: #16a34a !important; background: #ecfdf5 !important; border-color: rgba(22,163,74,0.25) !important; }
+.lib-table-modern .btn-act.btn-excel:hover { color: #fff !important; background: #16a34a !important; border-color: #16a34a !important; }
+.lib-table-modern .btn-act.btn-bank     { color: #0891b2 !important; background: #ecfeff !important; border-color: rgba(8,145,178,0.25) !important; }
+.lib-table-modern .btn-act.btn-bank:hover  { color: #fff !important; background: #0891b2 !important; border-color: #0891b2 !important; }
+.lib-table-modern .btn-act.btn-view     { color: #2563eb !important; background: #eff6ff !important; border-color: rgba(37,99,235,0.25) !important; }
+.lib-table-modern .btn-act.btn-view:hover  { color: #fff !important; background: #2563eb !important; border-color: #2563eb !important; }
+.lib-table-modern .btn-act.btn-room     { color: #2563eb !important; background: #eff6ff !important; border-color: rgba(37,99,235,0.25) !important; }
+.lib-table-modern .btn-act.btn-room:hover  { color: #fff !important; background: #2563eb !important; border-color: #2563eb !important; }
+.lib-table-modern .btn-act.btn-edit     { color: #d97706 !important; background: #fffbeb !important; border-color: rgba(217,119,6,0.25) !important; }
+.lib-table-modern .btn-act.btn-edit:hover  { color: #fff !important; background: #d97706 !important; border-color: #d97706 !important; }
+.lib-table-modern .btn-act.btn-del      { color: #dc2626 !important; background: #fef2f2 !important; border-color: rgba(220,38,38,0.25) !important; }
+.lib-table-modern .btn-act.btn-del:hover   { color: #fff !important; background: #dc2626 !important; border-color: #dc2626 !important; }
+.lib-table-modern .btn-act.btn-pdf      { color: #dc2626 !important; background: #fef2f2 !important; border-color: rgba(220,38,38,0.25) !important; }
+.lib-table-modern .btn-act.btn-pdf:hover   { color: #fff !important; background: #dc2626 !important; border-color: #dc2626 !important; }
+.lib-table-modern .btn-act.btn-word     { color: #1d4ed8 !important; background: #eff6ff !important; border-color: rgba(37,99,235,0.25) !important; }
+.lib-table-modern .btn-act.btn-word:hover  { color: #fff !important; background: #1d4ed8 !important; border-color: #1d4ed8 !important; }
+
+/* =====================================================================
+   PHÂN TRANG (PAGINATION) — dùng chung cho mọi bảng Thư viện
+   ===================================================================== */
+.lib-pagination {
+    display: flex; align-items: center; justify-content: flex-end;
+    gap: 4px; margin-top: 14px; flex-wrap: wrap;
+}
+.lib-pagination .page-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 32px; height: 32px; padding: 0 8px;
+    border: 1px solid #d1d5db; border-radius: 6px;
+    background: #fff; color: #374151; font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; transition: all 0.15s ease;
+    text-decoration: none; user-select: none;
+}
+.lib-pagination .page-btn:hover {
+    background: #f1f5f9; border-color: #9ca3af; color: #0f172a;
+}
+.lib-pagination .page-btn.active {
+    background: #1a1a1a; border-color: #1a1a1a; color: #fff;
+    pointer-events: none;
+}
+.lib-pagination .page-btn.disabled {
+    opacity: 0.4; pointer-events: none; cursor: default;
+}
+.lib-pagination .page-info {
+    font-size: 0.76rem; color: #6b7280; margin: 0 8px; white-space: nowrap;
+}
+@media (max-width: 480px) {
+    .lib-pagination { justify-content: center; }
+    .lib-pagination .page-info { display: none; }
+}
+
+/* ===== ĐIỆN THOẠI: đầu thẻ câu hỏi (Môn · Chương · Độ khó · Đóng góp) ===== */
+@media (max-width: 768px) {
+    .q-card-header { padding: 10px 14px; gap: 6px 10px; }
+    /* Cụm nhãn trái chiếm trọn hàng, cụm "Đóng góp" + nút xóa xuống HÀNG DƯỚI */
+    .q-card-header > .d-flex { flex: 1 1 100%; }
+    .q-card-header > .d-flex:last-child { justify-content: space-between; }
+    /* Nhãn nhỏ lại cho vừa màn hình, không bị bóp chữ */
+    .q-card-header .badge-chuong,
+    .q-card-header .badge-de,
+    .q-card-header .badge-tb,
+    .q-card-header .badge-kho {
+        font-size: 0.78rem; padding: 3px 8px;
+    }
+    .q-card-header .text-muted.small { font-size: 0.75rem; }
+    .q-card-body { padding: 14px; }
+}
+
+/* Cột "Độ khó" trong bảng: 3 chip số nhỏ Dễ/TB/Khó */
+.dk-mini { display: inline-flex; gap: 5px; }
+.dk-chip {
+    min-width: 26px; padding: 3px 8px; border-radius: 7px;
+    font-size: 0.78rem; font-weight: 800; text-align: center;
+}
+.dk-chip.dk-de  { background: #ecfdf5; color: #16a34a; }
+.dk-chip.dk-tb  { background: #fffbeb; color: #d97706; }
+.dk-chip.dk-kho { background: #fef2f2; color: #dc2626; }

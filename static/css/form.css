@@ -1,0 +1,202 @@
+/* =====================================================================
+   form.css — Bố cục biểu mẫu: nhóm ô nhập, nhãn, dòng báo lỗi.
+
+   Phần tô đỏ ô nhập sai nằm ở flash.css (lớp .field-invalid), do
+   form-validate.js gắn vào.
+   ===================================================================== */
+
+.form-group {
+    margin-bottom: 18px;
+}
+
+.form-label-dark,
+.form-label,
+.form-label-light {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.form-label-dark span,
+.form-label span {
+    color: var(--danger);
+}
+
+/* INPUT / TEXTAREA (tên class giữ nguyên cho tương thích) */
+.form-control-dark {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 0.9rem;
+    transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease), background 0.25s var(--ease);
+    font-family: inherit;
+}
+
+.form-control-dark:focus {
+    background: #fff;
+    border-color: var(--primary);
+    color: var(--text-primary);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14);
+    outline: none;
+}
+
+.form-control-dark::placeholder { color: #aeb6c2; font-weight: 400; }
+
+textarea.form-control-dark { resize: vertical; min-height: 100px; }
+
+/* INPUT GROUP */
+.input-group-custom {
+    display: flex;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+
+.input-group-custom:focus-within {
+    background: #fff;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14);
+}
+
+.input-group-custom i {
+    width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    font-size: 0.9rem;
+}
+
+.input-group-custom input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    padding: 11px 12px 11px 0;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.input-group-custom input::placeholder { color: #aeb6c2; font-weight: 400; }
+
+.toggle-pw {
+    width: 44px;
+    height: 44px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.25s ease;
+    font-size: 0.9rem;
+}
+
+.toggle-pw:hover { color: var(--primary); }
+
+/* SELECT */
+.form-select-dark {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 0.9rem;
+    transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+
+.form-select-dark:focus {
+    background: #fff;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14);
+    outline: none;
+}
+
+/* RADIO & CHECKBOX */
+.form-check { margin-bottom: 12px; }
+
+.form-check-input {
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    cursor: pointer;
+    accent-color: var(--primary);
+}
+
+.form-check-input:hover { border-color: var(--primary); }
+.form-check-input:checked { background: var(--primary); border-color: var(--primary); }
+
+.form-check-label {
+    margin-left: 8px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+/* FORM SECTION */
+.form-section-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0 15px;
+    color: var(--primary);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.form-section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* HELP TEXT */
+.form-hint,
+.form-text { color: var(--text-muted); font-size: 0.75rem; margin-top: 4px; }
+
+/* BUTTONS */
+.btn-auth {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-auth.primary { background: var(--grad-primary); color: #fff; }
+
+.btn-auth.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-primary);
+}
+
+.btn-filter {
+    background: var(--grad-primary);
+    border: none;
+    color: #fff;
+    padding: 9px 22px;
+    border-radius: 9px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.btn-filter:hover { transform: translateY(-1px); box-shadow: var(--shadow-primary); }

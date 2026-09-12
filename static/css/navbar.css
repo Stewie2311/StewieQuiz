@@ -1,0 +1,184 @@
+/* =====================================================================
+   navbar.css — Thanh điều hướng trên cùng (cố định, luôn hiện khi cuộn).
+   ===================================================================== */
+
+.navbar-custom {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 65px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    z-index: 999;
+}
+
+.navbar-container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0 30px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* BRAND */
+.navbar-brand { flex-shrink: 0; }
+
+.brand-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    font-weight: 800;
+    font-size: 1.1rem;
+    background: var(--grad-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    transition: gap 0.3s var(--ease);
+}
+
+.brand-link:hover { gap: 12px; }
+.brand-link i { font-size: 1.3rem; }
+
+/* NAV CENTER */
+.navbar-center { display: flex; gap: 5px; flex: 1; justify-content: center; }
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 10px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.25s var(--ease);
+    cursor: pointer;
+}
+
+.nav-item:hover,
+.nav-item.active {
+    background: var(--primary-soft);
+    color: var(--primary-dark);
+}
+
+.nav-item i { font-size: 0.95rem; }
+
+/* NAV RIGHT */
+.navbar-right { display: flex; align-items: center; gap: 15px; flex-shrink: 0; }
+
+.nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s var(--ease);
+}
+
+.login-btn {
+    background: var(--primary-soft);
+    color: var(--primary-dark);
+    border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+.login-btn:hover { background: rgba(37, 99, 235, 0.18); }
+
+.register-btn { background: var(--grad-primary); color: white; }
+.register-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-primary); }
+
+.admin-btn { background: var(--primary-soft); color: var(--primary-dark); border: none; }
+.admin-btn:hover { background: rgba(37, 99, 235, 0.18); }
+
+/* USER MENU */
+.user-menu { position: relative; }
+
+.user-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 6px 0;
+    transition: color 0.25s ease;
+}
+
+.user-btn:hover { color: var(--text-primary); }
+
+.user-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--grad-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: white;
+    box-shadow: var(--shadow-sm);
+}
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    min-width: 200px;
+    margin-top: 10px;
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.user-menu:hover .dropdown-menu { display: block; }
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid var(--border);
+}
+
+.dropdown-item:last-child { border-bottom: none; }
+.dropdown-item:hover { background: var(--primary-softer); color: var(--primary-dark); }
+
+/* MOBILE TOGGLE */
+.mobile-toggle {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+    .navbar-container { padding: 0 15px; }
+    .navbar-center { display: none; }
+    .mobile-toggle { display: block; }
+    .user-menu { order: -1; }
+}

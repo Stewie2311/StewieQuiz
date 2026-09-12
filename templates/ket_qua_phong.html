@@ -1,0 +1,106 @@
+{#
+  ket_qua_phong.html — BẢNG XẾP HẠNG của một phòng.
+  Sắp theo điểm giảm dần; hai người bằng điểm thì ai nộp trước đứng trên.
+#}
+{% extends "base.html" %}
+{% block title %}Kết quả phòng - Khoa TT-TT{% endblock %}
+
+{% block extra_css %}
+<style>
+    .kq-header {
+        background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(240,147,251,0.08));
+        border: 1px solid rgba(102,126,234,0.25);
+        border-radius: 18px; padding: 24px 28px; margin-bottom: 24px;
+    }
+    /* Bảng danh sách — đồng bộ với .data-table dùng chung toàn site */
+    .table-wrapper {
+        background: var(--surface, #fff); border: 1px solid var(--table-border, #e8eaed);
+        border-radius: var(--radius-lg, 18px); overflow: hidden;
+        box-shadow: var(--shadow-sm, 0 1px 2px rgba(20,35,59,0.06));
+    }
+    .kq-table { width: 100%; border-collapse: collapse; color: var(--text-secondary, #475569); font-size: 0.875rem; }
+    .kq-table thead th {
+        background: transparent; color: var(--text-primary, #14233b);
+        font-size: 0.96rem;
+        padding: 13px 16px; font-weight: 700;
+        border: 1px solid var(--table-border, #e8eaed);
+        text-align: left; white-space: nowrap;
+    }
+    .kq-table tbody td {
+        background: transparent; padding: 14px 16px; color: #374151;
+        font-size: 0.88rem; font-weight: 500;
+        vertical-align: middle; border: 1px solid var(--table-border, #e8eaed);
+    }
+    .kq-table tbody tr { transition: background 0.18s ease; }
+    .kq-table tbody tr:hover td { background: var(--table-hover, rgba(15,23,42,0.03)); }
+    .rank-badge {
+        width: 34px; height: 34px; border-radius: 10px; display: inline-flex;
+        align-items: center; justify-content: center; font-weight: 800;
+        background: #e2e8f0; color: #64748b;
+    }
+    .rank-1 { background: linear-gradient(135deg,#ffd700,#ffaa00); color:#1a1a1a; }
+    .rank-2 { background: linear-gradient(135deg,#c0c0c0,#9ca3af); color:#1a1a1a; }
+    .rank-3 { background: linear-gradient(135deg,#cd7f32,#a0522d); color:#0f172a; }
+    .diem-badge { font-weight: 800; font-size: 1.05rem; }
+    .diem-high { color: #16a34a; }
+    .diem-mid { color: #d97706; }
+    .diem-low { color: #dc2626; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 1000px;">
+    <div class="kq-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <h4 class="fw-bold mb-1"><i class="fas fa-trophy me-2" style="color:#ffd700;"></i>Bảng xếp hạng</h4>
+            <p class="text-muted mb-0">
+                {{ phong.ten_phong }} &middot; {{ phong.ten_mon }} &middot;
+                <span style="color:#2563eb;">{{ phong.ma_phong }}</span>
+            </p>
+        </div>
+    </div>
+
+    {% if ket_qua %}
+    <div class="table-wrapper" style="overflow-x:auto;">
+    <table class="kq-table">
+        <thead>
+            <tr>
+                <th>Hạng</th>
+                <th>Họ tên</th>
+                <th>MSSV / Lớp</th>
+                <th class="text-center">Câu đúng</th>
+                <th class="text-center">Điểm</th>
+                <th>Nộp lúc</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ts in ket_qua %}
+            <tr>
+                <td>
+                    <span class="rank-badge {% if loop.index <= 3 %}rank-{{ loop.index }}{% endif %}">
+                        {% if loop.index == 1 %}<i class="fas fa-crown"></i>{% else %}{{ loop.index }}{% endif %}
+                    </span>
+                </td>
+                <td class="fw-bold text-dark">{{ ts.ho_ten }}</td>
+                <td><span class="text-muted">{{ ts.ma_so_sv or '-' }}</span><br><small class="text-muted">{{ ts.lop or '' }}</small></td>
+                <td class="text-center">{{ ts.so_cau_dung or 0 }}/{{ ts.tong_so_cau or 0 }}</td>
+                <td class="text-center">
+                    {% set d = ts.diem if ts.diem is not none else 0 %}
+                    <span class="diem-badge {% if d >= 8 %}diem-high{% elif d >= 5 %}diem-mid{% else %}diem-low{% endif %}">
+                        {{ '%.2f'|format(d) }}
+                    </span>
+                </td>
+                <td><small class="text-muted">{% if ts.thoi_gian_nop %}{{ ts.thoi_gian_nop.strftime('%H:%M %d/%m') }}{% else %}-{% endif %}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5" style="background: #f8fafc; border-radius: 16px; border: 1px dashed #e2e8f0;">
+        <i class="fas fa-inbox fs-1 text-muted mb-3 opacity-50"></i>
+        <h5 class="text-muted">Chưa có thí sinh nào nộp bài.</h5>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

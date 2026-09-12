@@ -1,0 +1,295 @@
+{#
+  index.html — TRANG CHỦ. Một file, ba giao diện hoàn toàn khác nhau:
+
+    Chưa đăng nhập -> trang giới thiệu (hero + 6 bước hướng dẫn).
+    Học sinh       -> phòng đang mở + lịch sử bài đã thi.
+    Giáo viên      -> dashboard, thư viện, phòng thi, tạo câu hỏi.
+
+  Nội dung từng tab của giáo viên nằm ở các file *-section.html riêng, được
+  include vào đây cho file này khỏi phình to. Tab nào đang mở do biến
+  `active_tab` quyết định — server chọn sẵn, không để JavaScript chọn sau, nếu
+  không người dùng sẽ thấy tab Trang chủ lóe lên rồi mới nhảy sang tab đúng.
+#}
+{% extends 'base.html' %}
+
+{% block title %}Khoa TT-TT - Tạo đề thi tự động bằng AI{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}?v=lp20">
+{% endblock %}
+
+{% block content %}
+<div class="tabs-container">
+
+    <div class="tab-pane {% if active_tab|default('home') == 'home' %}active{% endif %}" id="home-tab">
+
+        <!-- ===================== HERO (2 cột: trái = nội dung, phải = ảnh/mockup) ===================== -->
+        <section class="lp-hero">
+            <div class="lp-hero-grid">
+                <div class="lp-hero-left">
+                    <h1 class="lp-title">Tạo đề thi cho riêng bạn<span class="lp-title-accent"> Nhanh chóng, Chính xác & Hiệu quả.</span></h1>
+                    <p class="lp-sub">
+                        Biến giáo trình PDF, hay đoạn văn bản thành bộ câu hỏi trắc nghiệm bằng AI,tạo đề thi rồi mở phòng thi trực tuyến có giám sát — tất cả trong một nền tảng.
+                    </p>
+                </div>
+
+                {# ===== BÊN PHẢI: ẢNH THẬT giao diện wizard, đặt trong khung NGHIÊNG 3D ===== #}
+                <div class="lp-hero-right">
+                  <div class="ws-stage">
+                    <div class="ws-photo">
+                        <img src="{{ url_for('static', filename='img/hero-wizard.png') }}"
+                             alt="Giao diện tạo câu hỏi tự động" loading="eager">
+                    </div>
+                  </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== HOW IT WORKS (ZIGZAG) ===================== -->
+        <section class="lp-steps container">
+
+            <!-- BƯỚC 1 — Text trái / Hình phải -->
+            <div class="row lp-step align-items-center g-5">
+                <div class="col-lg-6 lp-step-text reveal">
+                    <span class="lp-step-label">Bước 1</span>
+                    <h3>Tải tài liệu lên</h3>
+                    <p>Không cần gõ tay từng câu. Chỉ cần tải lên file <strong>PDF</strong>, 
+                       hoặc <strong>dán trực tiếp văn bản vào</strong>. Hệ thống tự đọc, bóc tách nội dung
+                       và sẵn sàng cho AI xử lý chỉ trong vài chục giây.</p>
+                </div>
+                <div class="col-lg-6 lp-step-illu reveal">
+                    <div class="illu illu-upload">
+                        <span class="orbit orbit-1"></span>
+                        <span class="orbit orbit-2"></span>
+                        <div class="up-ring">
+                            <div class="up-file" style="--a:0deg"><span class="up-ic"><i class="fas fa-file-pdf"></i></span></div>
+                            <div class="up-file" style="--a:60deg"><span class="up-ic"><i class="fas fa-file-word"></i></span></div>
+                            <div class="up-file" style="--a:120deg"><span class="up-ic"><i class="fas fa-file-lines"></i></span></div>
+                            <div class="up-file" style="--a:180deg"><span class="up-ic"><i class="fas fa-file-image"></i></span></div>
+                            <div class="up-file" style="--a:240deg"><span class="up-ic"><i class="fas fa-paste"></i></span></div>
+                            <div class="up-file" style="--a:300deg"><span class="up-ic"><i class="fas fa-book-open"></i></span></div>
+                        </div>
+                        <div class="up-cloud"><i class="fas fa-cloud-arrow-up"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BƯỚC 2 — Hình trái / Text phải -->
+            <div class="row lp-step align-items-center g-5 flex-lg-row-reverse">
+                <div class="col-lg-6 lp-step-text reveal">
+                    <span class="lp-step-label">Bước 2</span>
+                    <h3>AI sinh câu hỏi trắc nghiệm</h3>
+                    <p>AI phân tích nội dung trọng tâm và tự sinh <strong>câu hỏi trắc nghiệm</strong> bám sát tài liệu,
+                       kèm <strong>đáp án đúng</strong> và các <strong>phương án nhiễu</strong> hợp lý — phân loại sẵn
+                       theo <strong>chương</strong> và <strong>mức độ tư duy</strong> (thang Bloom).</p>
+                </div>
+                <div class="col-lg-6 lp-step-illu reveal">
+                    <div class="illu illu-cards">
+                        <div class="qcard qcard-back"></div>
+                        <div class="qcard qcard-mid"></div>
+                        <div class="qcard qcard-front">
+                            <div class="qc-q">Đâu là độ phức tạp của tìm kiếm nhị phân?</div>
+                            <div class="qc-opt">A. O(n)</div>
+                            <div class="qc-opt correct">B. O(log n) <i class="fas fa-check"></i></div>
+                            <div class="qc-opt">C. O(n²)</div>
+                            <div class="qc-opt">D. O(1)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BƯỚC 3 — Text trái / Hình phải -->
+            <div class="row lp-step align-items-center g-5">
+                <div class="col-lg-6 lp-step-text reveal">
+                    <span class="lp-step-label">Bước 3</span>
+                    <h3>Quản lý ngân hàng câu hỏi</h3>
+                    <p>Xem lại, chỉnh sửa và sắp xếp câu hỏi trong <strong>thư viện cá nhân</strong>. Lưu vào
+                       <strong>ngân hàng câu hỏi</strong> để tái sử dụng, hoặc <strong>chia sẻ ngân hàng dùng chung</strong>
+                       với đồng nghiệp — bạn toàn quyền kiểm soát chất lượng.</p>
+                </div>
+                <div class="col-lg-6 lp-step-illu reveal">
+                    <div class="illu illu-stats">
+                        <div class="st-card">
+                            <div class="st-head">
+                                <span>Ngân hàng câu hỏi</span>
+                                <span class="st-score">120</span>
+                            </div>
+                            <div class="st-line"><span class="st-name">Chương 1</span><div class="st-bar"><span style="width:92%"></span></div></div>
+                            <div class="st-line"><span class="st-name">Chương 2</span><div class="st-bar"><span style="width:74%"></span></div></div>
+                            <div class="st-line"><span class="st-name">Chương 3</span><div class="st-bar"><span style="width:58%"></span></div></div>
+                            <div class="st-chips">
+                                <span class="chip ok"><i class="fas fa-share-nodes"></i> Dùng chung</span>
+                                <span class="chip no"><i class="fas fa-pen"></i> Đang sửa</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BƯỚC 4 — Hình trái / Text phải -->
+            <div class="row lp-step align-items-center g-5 flex-lg-row-reverse">
+                <div class="col-lg-6 lp-step-text reveal">
+                    <span class="lp-step-label">Bước 4</span>
+                    <h3>Tạo đề thi theo ma trận</h3>
+                    <p>Dùng <strong>trình tạo đề theo từng bước</strong>: chọn học phần, thiết lập <strong>ma trận số câu</strong>
+                       theo chương và độ khó, rồi sinh <strong>nhiều mã đề</strong> (A01, A02…) với câu hỏi và đáp án
+                       được <strong>trộn ngẫu nhiên</strong> để chống gian lận.</p>
+                </div>
+                <div class="col-lg-6 lp-step-illu reveal">
+                    <div class="illu illu-paper">
+                        <div class="pp-card">
+                            <div class="pp-head">
+                                <span>Ma trận đề · CTDL&amp;GT</span>
+                                <span class="pp-codes"><b>A01</b><b>A02</b><b>A03</b></span>
+                            </div>
+                            <div class="pp-row"><span class="pp-name">Chương 1</span><div class="pp-bar"><span style="width:80%"></span></div><em>8</em></div>
+                            <div class="pp-row"><span class="pp-name">Chương 2</span><div class="pp-bar"><span style="width:60%"></span></div><em>6</em></div>
+                            <div class="pp-row"><span class="pp-name">Chương 3</span><div class="pp-bar"><span style="width:40%"></span></div><em>4</em></div>
+                            <div class="pp-foot"><i class="fas fa-shuffle"></i> Trộn câu &amp; đáp án mỗi mã đề</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BƯỚC 5 — Text trái / Hình phải -->
+            <div class="row lp-step align-items-center g-5">
+                <div class="col-lg-6 lp-step-text reveal">
+                    <span class="lp-step-label">Bước 5</span>
+                    <h3>Tổ chức phòng thi trực tuyến</h3>
+                    <p>Mở <strong>phòng thi</strong> có mã riêng, <strong>gán lớp</strong> và <strong>điểm danh theo MSSV</strong>.
+                       Mỗi thí sinh nhận <strong>ngẫu nhiên một mã đề</strong>, làm bài mọi lúc mọi nơi ngay trên điện thoại,
+                       có <strong>giám sát webcam thời gian thực</strong> và tự động chấm điểm.</p>
+                </div>
+                <div class="col-lg-6 lp-step-illu reveal">
+                    <div class="illu illu-mobile">
+                        <div class="phone">
+                            <span class="phone-notch"></span>
+                            <div class="phone-screen">
+                                <div class="ph-top"><i class="fas fa-circle-half-stroke"></i> Phòng thi CNTT01 <span class="ph-time"><i class="fas fa-clock"></i> 14:59</span></div>
+                                <div class="ph-q">Câu 3 / 20 — Cấu trúc dữ liệu nào hoạt động theo LIFO?</div>
+                                <div class="ph-opt">A. Hàng đợi (Queue)</div>
+                                <div class="ph-opt sel">B. Ngăn xếp (Stack)</div>
+                                <div class="ph-opt">C. Danh sách liên kết</div>
+                                <div class="ph-opt">D. Cây nhị phân</div>
+                                <button class="ph-next">Câu tiếp theo <i class="fas fa-arrow-right"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BƯỚC 6 — Hình trái / Text phải -->
+            <div class="row lp-step align-items-center g-5 flex-lg-row-reverse">
+                <div class="col-lg-6 lp-step-text reveal">
+                    <span class="lp-step-label">Bước 6</span>
+                    <h3>Phân tích &amp; xuất kết quả</h3>
+                    <p>Theo dõi <strong>điểm số tức thì</strong>, <strong>phân tích từng câu hỏi</strong>
+                       (độ khó, độ phân cách) bằng biểu đồ trực quan, và <strong>xuất đề thi hay bảng điểm</strong>
+                       ra <strong>Word, PDF, Excel</strong> chỉ với một cú nhấp.</p>
+                </div>
+                <div class="col-lg-6 lp-step-illu reveal">
+                    <div class="illu illu-report">
+                        <div class="rp-card">
+                            <div class="rp-head"><span>Phân tích đề thi</span><span class="rp-avg">7.8</span></div>
+                            <div class="rp-chart">
+                                <i style="height:40%"></i><i style="height:66%"></i><i style="height:88%"></i><i style="height:54%"></i><i style="height:72%"></i><i style="height:48%"></i>
+                            </div>
+                            <div class="rp-exports">
+                                <span class="rp-ex word"><i class="fas fa-file-word"></i> Word</span>
+                                <span class="rp-ex pdf"><i class="fas fa-file-pdf"></i> PDF</span>
+                                <span class="rp-ex excel"><i class="fas fa-file-excel"></i> Excel</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+    </div>
+
+    {% if user_role == 'hoc_sinh' %}
+        {% include 'student-room-section.html' %}
+        {% include 'student-history-section.html' %}
+
+    {% else %}
+        {% include 'exam-section.html' %}
+        {% include 'library-section.html' %}
+        {% include 'room-section.html' %}
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tabs = document.querySelectorAll('.nav-link[data-tab]');
+
+    // Chỉ quét các tab-pane nằm trực tiếp bên ngoài, bỏ qua tab con bên trong
+    const panes = document.querySelectorAll('.tabs-container > .tab-pane');
+
+    // Hiện đúng 1 tab chính theo tên (vd: 'library', 'room'...). Trả về true nếu có.
+    function showTab(tabName) {
+        const targetPane = document.getElementById(tabName + '-tab');
+        if (!targetPane) return false;
+        tabs.forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === tabName));
+        panes.forEach(p => {
+            const on = (p === targetPane);
+            p.classList.toggle('active', on);
+            p.style.display = on ? 'block' : 'none';
+        });
+        // Kích hoạt pills bên trong room-section theo ?pill (nếu có) sau khi tab hiện ra.
+        // KHÔNG ép về 'all-rooms' khi URL không có ?pill — lúc đó .room-subnav trong navbar
+        // đã tự gọi showRoomTab() cho đúng mục vừa bấm, ép nữa sẽ đè mất lựa chọn đó.
+        if (tabName === 'room' && (new URLSearchParams(location.search)).get('pill')) {
+            requestAnimationFrame(function () {
+                requestAnimationFrame(applyRoomPill);
+            });
+        }
+        return true;
+    }
+
+    // Mở đúng tab nhỏ của Phòng thi theo ?pill= (all | my | done)
+    function applyRoomPill() {
+        var pill = (new URLSearchParams(location.search)).get('pill');
+        var tabId = pill === 'my' ? 'my-rooms' : (pill === 'done' ? 'done-rooms' : 'all-rooms');
+        if (typeof window.showRoomTab === 'function') window.showRoomTab(tabId);
+    }
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            if (this.getAttribute('href') !== '#' && this.getAttribute('href') !== '/') return;
+            e.preventDefault();
+            showTab(this.getAttribute('data-tab'));
+        });
+    });
+
+    // Tab đúng đã được SERVER render active sẵn (theo ?tab=...) nên KHÔNG nháy
+    // qua Trang chủ. Lúc tải KHÔNG gọi showTab (tránh chạy lại hiệu ứng) —
+    // chỉ đồng bộ nút nav đang sáng cho khớp pane, rồi dọn URL cho gọn.
+    const activePane = document.querySelector('.tabs-container > .tab-pane.active');
+    const activeName = activePane ? activePane.id.replace(/-tab$/, '') : 'home';
+    tabs.forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === activeName));
+    // Đến từ dropdown ở trang khác (/?tab=room&pill=my): server render sẵn pane nên showTab()
+    // KHÔNG chạy -> phải tự bật tab nhỏ theo ?pill (đọc TRƯỚC khi dọn URL bên dưới).
+    if (activeName === 'room') applyRoomPill();
+    if (new URLSearchParams(window.location.search).get('tab')) {
+        window.history.replaceState(null, '', '/');
+    }
+    panes.forEach(p => { if (!p.classList.contains('active')) p.style.display = 'none'; });
+
+    // Hiệu ứng cuộn-hiện cho các bước quy trình
+    const revealEls = document.querySelectorAll('.reveal');
+    if ('IntersectionObserver' in window && revealEls.length) {
+        const io = new IntersectionObserver((entries) => {
+            entries.forEach(en => {
+                if (en.isIntersecting) { en.target.classList.add('is-visible'); io.unobserve(en.target); }
+            });
+        }, { threshold: 0.18 });
+        revealEls.forEach(el => io.observe(el));
+    } else {
+        revealEls.forEach(el => el.classList.add('is-visible'));
+    }
+});
+</script>
+{% endblock %}
